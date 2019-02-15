@@ -25,19 +25,14 @@ import sql
 #import stats
 
 from datachecks import DatacheckEntry
-from graphs import HighwayGraph, GraphListEntry, PlaceRadius
-
 from util import ErrorList, ElapsedTime
-
-# from quadtree import WaypointQuadtree
-# from wpt import HighwaySystem
-# from travelers import TravelerList
 
 import pyximport; pyximport.install()
 
 from x_quadtree import WaypointQuadtree
 from x_wpt import HighwaySystem
 from x_travelers import TravelerList
+from x_graphs import HighwayGraph, GraphListEntry, PlaceRadius
 import x_stats as stats
 
 #
