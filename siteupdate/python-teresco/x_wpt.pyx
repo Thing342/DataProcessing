@@ -536,7 +536,7 @@ class Route:
         """printable version of the object"""
         return self.root + " (" + str(len(self.point_list)) + " total points)"
 
-    def read_wpt(self, all_waypoints, all_waypoints_lock, datacheckerrors, el, path="../../../HighwayData/hwy_data"):
+    def read_wpt(self, all_waypoints, datacheckerrors, el, path="../../../HighwayData/hwy_data"):
         """read data into the Route's waypoint list from a .wpt file"""
         # print("read_wpt on " + str(self))
         self.point_list = []
@@ -562,7 +562,6 @@ class Route:
                     for label in w.alt_labels:
                         self.unused_alt_labels.add(label.upper().strip("+"))
                     # look for colocated points
-                    all_waypoints_lock.acquire()
                     other_w = all_waypoints.waypoint_at_same_point(w)
                     if other_w is not None:
                         # see if this is the first point colocated with other_w
@@ -593,7 +592,6 @@ class Route:
                                 other_w.near_miss_points.append(w)
 
                     all_waypoints.insert(w)
-                    all_waypoints_lock.release()
                     # add HighwaySegment, if not first point
                     if previous_point is not None:
                         self.segment_list.append(HighwaySegment(previous_point, w, self))

@@ -26,16 +26,18 @@ import stats
 from datachecks import DatacheckEntry
 from graphs import HighwayGraph, GraphListEntry, PlaceRadius
 
-from travelers import TravelerList
 from util import ErrorList, ElapsedTime
 
 # from quadtree import WaypointQuadtree
 # from wpt import HighwaySystem
+# from travelers import TravelerList
 
 import pyximport; pyximport.install()
 
 from x_quadtree import WaypointQuadtree
 from x_wpt import HighwaySystem
+from x_travelers import TravelerList
+
 
 #
 # Execution code starts here
@@ -260,7 +262,6 @@ print(str(len(all_wpt_files)) + " files found.")
 # For finding colocated Waypoints and concurrent segments, we have
 # quadtree of all Waypoints in existence to find them efficiently
 all_waypoints = WaypointQuadtree(-90, -180, 90, 180)
-all_waypoints_lock = threading.Lock()
 
 print(et.et() + "Reading waypoints for all routes.")
 
@@ -273,7 +274,7 @@ def read_wpts_for_highway_system(h):
         wpt_path = args.highwaydatapath + "/hwy_data" + "/" + r.region + "/" + r.system.systemname + "/" + r.root + ".wpt"
         if wpt_path in all_wpt_files:
             all_wpt_files.remove(wpt_path)
-        r.read_wpt(all_waypoints, all_waypoints_lock, datacheckerrors,
+        r.read_wpt(all_waypoints, datacheckerrors,
                    el, args.highwaydatapath + "/hwy_data")
         if len(r.point_list) < 2:
             el.add_error("Route contains fewer than 2 points: " + str(r))
@@ -283,55 +284,8 @@ def read_wpts_for_highway_system(h):
     print("!", flush=True)
 
 
-"""
-# set up for threaded processing of highway systems
-class ReadWptThread(threading.Thread):
-
-    def __init__(self, id, hs_list, lock):
-        threading.Thread.__init__(self)
-        self.id = id
-        self.hs_list = hs_list
-        self.lock = lock
-
-    def run(self):
-        # print("Starting ReadWptThread " + str(self.id) + " lock is " + str(self.lock))
-        while True:
-            self.lock.acquire(True)
-            # print("Thread " + str(self.id) + " with len(self.hs_list)=" + str(len(self.hs_list)))
-            if len(self.hs_list) == 0:
-                self.lock.release()
-                break
-            h = self.hs_list.pop()
-            self.lock.release()
-            # print("Thread " + str(self.id) + " assigned " + str(h))
-            read_wpts_for_highway_system(h)
-
-        # print("Exiting ReadWptThread " + str(self.id))
-
-
-hs_lock = threading.Lock()
-# print("Created lock: " + str(hs_lock))
-hs = highway_systems[:]
-hs.reverse()
-thread_list = []
-# create threads
-for i in range(num_threads):
-    thread_list.append(ReadWptThread(i, hs, hs_lock))
-
-# start threads
-for t in thread_list:
-    t.start()
-
-# wait for threads
-for t in thread_list:
-    t.join()
-"""
 for h in highway_systems:
     read_wpts_for_highway_system(h)
-
-#pool = ThreadPoolExecutor(max_workers=num_threads)
-#fs = [pool.submit(read_wpts_for_highway_system, system) for system in highway_systems]
-#concurrent.futures.wait(fs)
 
 print(et.et() + "Sorting waypoints in Quadtree.")
 all_waypoints.sort()
