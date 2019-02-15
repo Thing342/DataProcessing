@@ -1,0 +1,12 @@
+graphs
+logs
+nmp_merged
+
+__pycache__/
+
+*.sql
+*.csv
+*.tmg
+*.log
+*.nmp
+.idea/
