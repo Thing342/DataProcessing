@@ -1,3 +1,5 @@
+# cython: language_level=3
+
 import math
 import threading
 
@@ -135,44 +137,14 @@ class Waypoint:
         """return the distance in miles between this waypoint and another
         including the factor defined by the CHM project to adjust for
         unplotted curves in routes"""
-        # convert to radians
-        rlat1 = math.radians(self.lat)
-        rlng1 = math.radians(self.lng)
-        rlat2 = math.radians(other.lat)
-        rlng2 = math.radians(other.lng)
-
-        ans = math.acos(math.cos(rlat1) * math.cos(rlng1) * math.cos(rlat2) * math.cos(rlng2) + \
-                        math.cos(rlat1) * math.sin(rlng1) * math.cos(rlat2) * math.sin(rlng2) + \
-                        math.sin(rlat1) * math.sin(rlat2)) * 3963.1  # EARTH_RADIUS;
-        return ans * 1.02112
+        cdef double dist_mi = haversine_distance(self.lat, other.lat, self.lng, other.lng)
+        return dist_mi * 1.02112
 
     def angle(self, pred, succ):
         """return the angle in degrees formed by the waypoints between the
         line from pred to self and self to succ"""
-        # convert to radians
-        rlatself = math.radians(self.lat)
-        rlngself = math.radians(self.lng)
-        rlatpred = math.radians(pred.lat)
-        rlngpred = math.radians(pred.lng)
-        rlatsucc = math.radians(succ.lat)
-        rlngsucc = math.radians(succ.lng)
-
-        x0 = math.cos(rlngpred) * math.cos(rlatpred)
-        x1 = math.cos(rlngself) * math.cos(rlatself)
-        x2 = math.cos(rlngsucc) * math.cos(rlatsucc)
-
-        y0 = math.sin(rlngpred) * math.cos(rlatpred)
-        y1 = math.sin(rlngself) * math.cos(rlatself)
-        y2 = math.sin(rlngsucc) * math.cos(rlatsucc)
-
-        z0 = math.sin(rlatpred)
-        z1 = math.sin(rlatself)
-        z2 = math.sin(rlatsucc)
-
-        return math.degrees(math.acos(
-            ((x2 - x1) * (x1 - x0) + (y2 - y1) * (y1 - y0) + (z2 - z1) * (z1 - z0)) / math.sqrt(
-                ((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1) + (z2 - z1) * (z2 - z1)) * (
-                            (x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0)))))
+        cdef double angle_deg = geo_angle(pred.lat, pred.lng, self.lat, self.lng, succ.lat, succ.lng)
+        return angle_deg
 
     def canonical_waypoint_name(self, log):
         """Best name we can come up with for this point bringing in
@@ -766,3 +738,53 @@ class HighwaySystem:
 
     def __str__(self):
         return self.systemname
+
+
+from libc.math cimport sin, cos, asin, acos, pi, sqrt
+
+cdef double EARTH_RADIUS_MILES = 3963.1
+cdef double D2R_FACTOR = pi / 180.0
+cdef double R2D_FACTOR = 180 / pi
+
+cdef double radians_of_degrees(double degrees):
+    return degrees * D2R_FACTOR
+
+cdef double degrees_of_radians(double radians):
+    return radians * R2D_FACTOR
+
+cdef double haversine_distance(double lat1, double lat2, double lng1, double lng2):
+    cdef double rlat1 = radians_of_degrees(lat1)
+    cdef double rlng1 = radians_of_degrees(lng1)
+    cdef double rlat2 = radians_of_degrees(lat2)
+    cdef double rlng2 = radians_of_degrees(lng2)
+
+    cdef double ans = acos(cos(rlat1) * cos(rlng1) * cos(rlat2) * cos(rlng2) + \
+        cos(rlat1) * sin(rlng1) * cos(rlat2) * sin(rlng2) + \
+        sin(rlat1) * sin(rlat2)) * EARTH_RADIUS_MILES
+
+    return ans
+
+cdef double geo_angle(double predlat, double predlng, double selflat, double selflng, double succlat, double succlng):
+    cdef double rlatself = radians_of_degrees(selflat)
+    cdef double rlngself = radians_of_degrees(selflng)
+    cdef double rlatpred = radians_of_degrees(predlat)
+    cdef double rlngpred = radians_of_degrees(predlng)
+    cdef double rlatsucc = radians_of_degrees(succlat)
+    cdef double rlngsucc = radians_of_degrees(succlng)
+
+    cdef double x0 = cos(rlngpred) * cos(rlatpred)
+    cdef double x1 = cos(rlngself) * cos(rlatself)
+    cdef double x2 = cos(rlngsucc) * cos(rlatsucc)
+
+    cdef double y0 = sin(rlngpred) * cos(rlatpred)
+    cdef double y1 = sin(rlngself) * cos(rlatself)
+    cdef double y2 = sin(rlngsucc) * cos(rlatsucc)
+
+    cdef double z0 = sin(rlatpred)
+    cdef double z1 = sin(rlatself)
+    cdef double z2 = sin(rlatsucc)
+
+    return degrees_of_radians(acos(
+        ((x2 - x1) * (x1 - x0) + (y2 - y1) * (y1 - y0) + (z2 - z1) * (z1 - z0)) / sqrt(
+            ((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1) + (z2 - z1) * (z2 - z1)) * (
+                        (x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0)))))
