@@ -431,7 +431,7 @@ class HighwaySegment:
         self.waypoint2 = w2
         self.route = route
         self.concurrent = None
-        self.clinched_by = []
+        self.clinched_by = set()
         self.segment_name = None
 
     def __str__(self):
@@ -439,7 +439,7 @@ class HighwaySegment:
 
     def add_clinched_by(self, traveler):
         if traveler not in self.clinched_by:
-            self.clinched_by.append(traveler)
+            self.clinched_by.add(traveler)
             return True
         else:
             return False
