@@ -22,7 +22,8 @@ from concurrent.futures.thread import ThreadPoolExecutor
 
 import nmp
 import sql
-import stats
+#import stats
+
 from datachecks import DatacheckEntry
 from graphs import HighwayGraph, GraphListEntry, PlaceRadius
 
@@ -37,7 +38,7 @@ import pyximport; pyximport.install()
 from x_quadtree import WaypointQuadtree
 from x_wpt import HighwaySystem
 from x_travelers import TravelerList
-
+import x_stats as stats
 
 #
 # Execution code starts here
