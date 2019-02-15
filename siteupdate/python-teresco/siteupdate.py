@@ -21,6 +21,7 @@ import threading
 from concurrent.futures.thread import ThreadPoolExecutor
 
 import nmp
+import regions
 import sql
 #import stats
 
@@ -30,9 +31,10 @@ from util import ErrorList, ElapsedTime
 import pyximport; pyximport.install()
 
 from x_quadtree import WaypointQuadtree
-from x_wpt import HighwaySystem
 from x_travelers import TravelerList
 from x_graphs import HighwayGraph, GraphListEntry, PlaceRadius
+
+import x_wpt as wpt
 import x_stats as stats
 
 #
@@ -78,162 +80,15 @@ traveler_ids = os.listdir(args.userlistfilepath) if traveler_ids is None else (i
 # number of threads to use
 num_threads = int(args.numthreads)
 
-# read region, country, continent descriptions
-print(et.et() + "Reading region, country, and continent descriptions.")
-
-continents = []
-try:
-    file = open(args.highwaydatapath + "/continents.csv", "rt", encoding='utf-8')
-except OSError as e:
-    el.add_error(str(e))
-else:
-    lines = file.readlines()
-    file.close()
-    lines.pop(0)  # ignore header line
-    for line in lines:
-        fields = line.rstrip('\n').split(";")
-        if len(fields) != 2:
-            el.add_error("Could not parse continents.csv line: " + line)
-            continue
-        continents.append(fields)
-
-countries = []
-try:
-    file = open(args.highwaydatapath + "/countries.csv", "rt", encoding='utf-8')
-except OSError as e:
-    el.add_error(str(e))
-else:
-    lines = file.readlines()
-    file.close()
-    lines.pop(0)  # ignore header line
-    for line in lines:
-        fields = line.rstrip('\n').split(";")
-        if len(fields) != 2:
-            el.add_error("Could not parse countries.csv line: " + line)
-            continue
-        countries.append(fields)
-
-all_regions = []
-try:
-    file = open(args.highwaydatapath + "/regions.csv", "rt", encoding='utf-8')
-except OSError as e:
-    el.add_error(str(e))
-else:
-    lines = file.readlines()
-    file.close()
-    lines.pop(0)  # ignore header line
-    for line in lines:
-        fields = line.rstrip('\n').split(";")
-        if len(fields) != 5:
-            el.add_error("Could not parse regions.csv line: " + line)
-            continue
-        # look up country and continent, add index into those arrays
-        # in case they're needed for lookups later (not needed for DB)
-        for i in range(len(countries)):
-            country = countries[i][0]
-            if country == fields[2]:
-                fields.append(i)
-                break
-        if len(fields) != 6:
-            el.add_error("Could not find country matching regions.csv line: " + line)
-            continue
-        for i in range(len(continents)):
-            continent = continents[i][0]
-            if continent == fields[3]:
-                fields.append(i)
-                break
-        if len(fields) != 7:
-            el.add_error("Could not find continent matching regions.csv line: " + line)
-            continue
-        all_regions.append(fields)
+# parse regions, countries, and continents
+(all_regions, countries, continents) = regions.parse_regions(et, el, args)
 
 # Create a list of HighwaySystem objects, one per system in systems.csv file
-highway_systems = []
-print(et.et() + "Reading systems list in " + args.highwaydatapath + "/" + args.systemsfile + ".  ", end="", flush=True)
-try:
-    file = open(args.highwaydatapath + "/" + args.systemsfile, "rt", encoding='utf-8')
-except OSError as e:
-    el.add_error(str(e))
-else:
-    lines = file.readlines()
-    file.close()
-    lines.pop(0)  # ignore header line for now
-    ignoring = []
-    for line in lines:
-        if line.startswith('#'):
-            ignoring.append("Ignored comment in " + args.systemsfile + ": " + line.rstrip('\n'))
-            continue
-        fields = line.rstrip('\n').split(";")
-        if len(fields) != 6:
-            el.add_error("Could not parse " + args.systemsfile + " line: " + line)
-            continue
-        print(fields[0] + ".", end="", flush=True)
-        hs = HighwaySystem(fields[0], fields[1],
-                           fields[2].replace("'", "''"),
-                           fields[3], fields[4], fields[5], el,
-                           args.highwaydatapath + "/hwy_data/_systems")
-        highway_systems.append(hs)
-    print("")
-    # print at the end the lines ignored
-    for line in ignoring:
-        print(line)
+highway_systems = wpt.parse_highway_systems(et, el, args)
 
 # list for datacheck errors that we will need later
 datacheckerrors = []
-
-# check for duplicate root entries among Route and ConnectedRoute
-# data in all highway systems
-print(et.et() + "Checking for duplicate list names in routes, roots in routes and connected routes.", flush=True)
-roots = set()
-list_names = set()
-duplicate_list_names = set()
-for h in highway_systems:
-    for r in h.route_list:
-        if r.root in roots:
-            el.add_error("Duplicate root in route lists: " + r.root)
-        else:
-            roots.add(r.root)
-        list_name = r.region + ' ' + r.list_entry_name()
-        if list_name in list_names:
-            duplicate_list_names.add(list_name)
-        else:
-            list_names.add(list_name)
-
-con_roots = set()
-for h in highway_systems:
-    for cr in h.con_route_list:
-        for r in cr.roots:
-            if r.root in con_roots:
-                el.add_error("Duplicate root in con_route lists: " + r.root)
-            else:
-                con_roots.add(r.root)
-
-# Make sure every route was listed as a part of some connected route
-if len(roots) == len(con_roots):
-    print("Check passed: same number of routes as connected route roots. " + str(len(roots)))
-else:
-    el.add_error("Check FAILED: " + str(len(roots)) + " routes != " + str(len(con_roots)) + " connected route roots.")
-    roots = roots - con_roots
-    # there will be some leftovers, let's look up their routes to make
-    # an error report entry (not worried about efficiency as there would
-    # only be a few in reasonable cases)
-    num_found = 0
-    for h in highway_systems:
-        for r in h.route_list:
-            for lr in roots:
-                if lr == r.root:
-                    el.add_error("route " + lr + " not matched by any connected route root.")
-                    num_found += 1
-                    break
-    print("Added " + str(num_found) + " ROUTE_NOT_IN_CONNECTED error entries.")
-
-# report any duplicate list names as errors
-if len(duplicate_list_names) > 0:
-    print("Found " + str(len(duplicate_list_names)) + " DUPLICATE_LIST_NAME case(s).")
-    for d in duplicate_list_names:
-        el.add_error("Duplicate list name: " + d)
-else:
-    print("No duplicate list names found.")
+wpt.systems_datachecks(et, el, highway_systems, datacheckerrors)
 
 # write file mapping CHM datacheck route lists to root (commented out,
 # unlikely needed now)

@@ -740,7 +740,96 @@ class HighwaySystem:
         return self.systemname
 
 
-from libc.math cimport sin, cos, asin, acos, pi, sqrt
+def parse_highway_systems(et, el, args):
+    cdef list highway_systems = []
+    print(et.et() + "Reading systems list in " + args.highwaydatapath + "/" + args.systemsfile + ".  ")
+    try:
+        file = open(args.highwaydatapath + "/" + args.systemsfile, "rt", encoding='utf-8')
+    except OSError as e:
+        el.add_error(str(e))
+    else:
+        lines = file.readlines()
+        file.close()
+        lines.pop(0)  # ignore header line for now
+        ignoring = []
+        for line in lines:
+            if line.startswith('#'):
+                ignoring.append("Ignored comment in " + args.systemsfile + ": " + line.rstrip('\n'))
+                continue
+            fields = line.rstrip('\n').split(";")
+            if len(fields) != 6:
+                el.add_error("Could not parse " + args.systemsfile + " line: " + line)
+                continue
+            hs = HighwaySystem(fields[0], fields[1],
+                               fields[2].replace("'", "''"),
+                               fields[3], fields[4], fields[5], el,
+                               args.highwaydatapath + "/hwy_data/_systems")
+            highway_systems.append(hs)
+        print("")
+        # print at the end the lines ignored
+        for line in ignoring:
+            print(line)
+    return highway_systems
+
+
+def systems_datachecks(et, el, list highway_systems, list datacheckerrors):
+    # check for duplicate root entries among Route and ConnectedRoute
+    # data in all highway systems
+    print(et.et() + "Checking for duplicate list names in routes, roots in routes and connected routes.",)
+    roots = set()
+    list_names = set()
+    duplicate_list_names = set()
+    for h in highway_systems:
+        for r in h.route_list:
+            if r.root in roots:
+                el.add_error("Duplicate root in route lists: " + r.root)
+            else:
+                roots.add(r.root)
+            list_name = r.region + ' ' + r.list_entry_name()
+            if list_name in list_names:
+                duplicate_list_names.add(list_name)
+            else:
+                list_names.add(list_name)
+
+    con_roots = set()
+    for h in highway_systems:
+        for cr in h.con_route_list:
+            for r in cr.roots:
+                if r.root in con_roots:
+                    el.add_error("Duplicate root in con_route lists: " + r.root)
+                else:
+                    con_roots.add(r.root)
+
+    # Make sure every route was listed as a part of some connected route
+    if len(roots) == len(con_roots):
+        print("Check passed: same number of routes as connected route roots. " + str(len(roots)))
+    else:
+        el.add_error("Check FAILED: " + str(len(roots)) + " routes != " + str(len(con_roots)) + " connected route roots.")
+        roots = roots - con_roots
+        # there will be some leftovers, let's look up their routes to make
+        # an error report entry (not worried about efficiency as there would
+        # only be a few in reasonable cases)
+        num_found = 0
+        for h in highway_systems:
+            for r in h.route_list:
+                for lr in roots:
+                    if lr == r.root:
+                        el.add_error("route " + lr + " not matched by any connected route root.")
+                        num_found += 1
+                        break
+        print("Added " + str(num_found) + " ROUTE_NOT_IN_CONNECTED error entries.")
+
+    # report any duplicate list names as errors
+    if len(duplicate_list_names) > 0:
+        print("Found " + str(len(duplicate_list_names)) + " DUPLICATE_LIST_NAME case(s).")
+        for d in duplicate_list_names:
+            el.add_error("Duplicate list name: " + d)
+    else:
+        print("No duplicate list names found.")
+
+# ---- C-only code begins below -----
+
+from libc.math cimport sin, cos, acos, pi, sqrt
 
 cdef double EARTH_RADIUS_MILES = 3963.1
 cdef double D2R_FACTOR = pi / 180.0

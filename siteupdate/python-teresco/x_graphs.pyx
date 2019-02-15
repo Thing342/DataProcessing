@@ -306,29 +306,13 @@ class PlaceRadius:
 
     def contains_vertex_info(self, vinfo):
         """return whether vinfo's coordinates are within this area"""
-        # convert to radians to compte distance
-        rlat1 = math.radians(self.lat)
-        rlng1 = math.radians(self.lng)
-        rlat2 = math.radians(vinfo.lat)
-        rlng2 = math.radians(vinfo.lng)
-
-        ans = math.acos(math.cos(rlat1) * math.cos(rlng1) * math.cos(rlat2) * math.cos(rlng2) + \
-                        math.cos(rlat1) * math.sin(rlng1) * math.cos(rlat2) * math.sin(rlng2) + \
-                        math.sin(rlat1) * math.sin(rlat2)) * 3963.1  # EARTH_RADIUS;
-        return ans <= self.r
+        cdef double dist_mi = haversine_distance(self.lat, vinfo.lat, self.lng, vinfo.lng)
+        return dist_mi <= self.r
 
     def contains_waypoint(self, w):
         """return whether w is within this area"""
-        # convert to radians to compte distance
-        rlat1 = math.radians(self.lat)
-        rlng1 = math.radians(self.lng)
-        rlat2 = math.radians(w.lat)
-        rlng2 = math.radians(w.lng)
-
-        ans = math.acos(math.cos(rlat1) * math.cos(rlng1) * math.cos(rlat2) * math.cos(rlng2) + \
-                        math.cos(rlat1) * math.sin(rlng1) * math.cos(rlat2) * math.sin(rlng2) + \
-                        math.sin(rlat1) * math.sin(rlat2)) * 3963.1  # EARTH_RADIUS;
-        return ans <= self.r
+        cdef double dist_mi = haversine_distance(self.lat, w.lat, self.lng, w.lng)
+        return dist_mi <= self.r
 
     def contains_edge(self, e):
         """return whether both endpoints of edge e are within this area"""
@@ -712,3 +696,54 @@ class HighwayGraph:
 
         graph_list.append(GraphListEntry(root + "-simple.tmg", descr, len(mv), len(mse), "simple", category))
         graph_list.append(GraphListEntry(root + ".tmg", descr, visible, len(mce), "collapsed", category))
+
+# ---- C-only code begins below -----
+
+from libc.math cimport sin, cos, acos, pi, sqrt
+
+cdef double EARTH_RADIUS_MILES = 3963.1
+cdef double D2R_FACTOR = pi / 180.0
+cdef double R2D_FACTOR = 180 / pi
+
+cdef double radians_of_degrees(double degrees):
+    return degrees * D2R_FACTOR
+
+cdef double degrees_of_radians(double radians):
+    return radians * R2D_FACTOR
+
+cdef double haversine_distance(double lat1, double lat2, double lng1, double lng2):
+    cdef double rlat1 = radians_of_degrees(lat1)
+    cdef double rlng1 = radians_of_degrees(lng1)
+    cdef double rlat2 = radians_of_degrees(lat2)
+    cdef double rlng2 = radians_of_degrees(lng2)
+
+    cdef double ans = acos(cos(rlat1) * cos(rlng1) * cos(rlat2) * cos(rlng2) + \
+        cos(rlat1) * sin(rlng1) * cos(rlat2) * sin(rlng2) + \
+        sin(rlat1) * sin(rlat2)) * EARTH_RADIUS_MILES
+
+    return ans
+
+cdef double geo_angle(double predlat, double predlng, double selflat, double selflng, double succlat, double succlng):
+    cdef double rlatself = radians_of_degrees(selflat)
+    cdef double rlngself = radians_of_degrees(selflng)
+    cdef double rlatpred = radians_of_degrees(predlat)
+    cdef double rlngpred = radians_of_degrees(predlng)
+    cdef double rlatsucc = radians_of_degrees(succlat)
+    cdef double rlngsucc = radians_of_degrees(succlng)
+
+    cdef double x0 = cos(rlngpred) * cos(rlatpred)
+    cdef double x1 = cos(rlngself) * cos(rlatself)
+    cdef double x2 = cos(rlngsucc) * cos(rlatsucc)
+
+    cdef double y0 = sin(rlngpred) * cos(rlatpred)
+    cdef double y1 = sin(rlngself) * cos(rlatself)
+    cdef double y2 = sin(rlngsucc) * cos(rlatsucc)
+
+    cdef double z0 = sin(rlatpred)
+    cdef double z1 = sin(rlatself)
+    cdef double z2 = sin(rlatsucc)
+
+    return degrees_of_radians(acos(
+        ((x2 - x1) * (x1 - x0) + (y2 - y1) * (y1 - y0) + (z2 - z1) * (z1 - z0)) / sqrt(
+            ((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1) + (z2 - z1) * (z2 - z1)) * (
+                        (x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0)))))
