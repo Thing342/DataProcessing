@@ -11,11 +11,14 @@ This module defines classes to represent the contents of a
 """
 
 import argparse
+import concurrent
 import datetime
 import os
 import re
 import sys
 import threading
+
+from concurrent.futures.thread import ThreadPoolExecutor
 
 import nmp
 import sql
@@ -27,8 +30,7 @@ from travelers import TravelerList
 from util import ErrorList, ElapsedTime
 from wpt import HighwaySystem
 
-
-# 
+#
 # Execution code starts here
 #
 # start a timer for including elapsed time reports in messages
@@ -274,6 +276,7 @@ def read_wpts_for_highway_system(h):
     print("!", flush=True)
 
 
+"""
 # set up for threaded processing of highway systems
 class ReadWptThread(threading.Thread):
 
@@ -315,9 +318,13 @@ for t in thread_list:
 # wait for threads
 for t in thread_list:
     t.join()
+"""
+for h in highway_systems:
+    read_wpts_for_highway_system(h)
 
-# for h in highway_systems:
-#    read_wpts_for_highway_system(h)
+#pool = ThreadPoolExecutor(max_workers=num_threads)
+#fs = [pool.submit(read_wpts_for_highway_system, system) for system in highway_systems]
+#concurrent.futures.wait(fs)
 
 print(et.et() + "Sorting waypoints in Quadtree.")
 all_waypoints.sort()
