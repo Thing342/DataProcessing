@@ -18,6 +18,7 @@ import re
 import sys
 import threading
 
+import nmp
 from datachecks import DatacheckEntry
 from graphs import HighwayGraph, GraphListEntry, PlaceRadius
 from travelers import TravelerList
@@ -26,16 +27,16 @@ from quadtree import WaypointQuadtree
 from wpt import HighwaySystem
 
 
-def format_clinched_mi(clinched,total):
+def format_clinched_mi(clinched, total):
     """return a nicely-formatted string for a given number of miles
     clinched and total miles, including percentage"""
     percentage = "-.-%"
     if total != 0.0:
-        percentage = "({0:.1f}%)".format(100*clinched/total)
+        percentage = "({0:.1f}%)".format(100 * clinched / total)
     return "{0:.2f}".format(clinched) + " of {0:.2f}".format(total) + \
-        " mi " + percentage
+           " mi " + percentage
 
-    
+
 # 
 # Execution code starts here
 #
@@ -47,23 +48,28 @@ el = ErrorList()
 
 # argument parsing
 #
-parser = argparse.ArgumentParser(description="Create SQL, stats, graphs, and log files from highway and user data for the Travel Mapping project.")
+parser = argparse.ArgumentParser(
+    description="Create SQL, stats, graphs, and log files from highway and user data for the Travel Mapping project.")
 parser.add_argument("-w", "--highwaydatapath", default="../../../HighwayData", \
-                        help="path to the root of the highway data directory structure")
+                    help="path to the root of the highway data directory structure")
 parser.add_argument("-s", "--systemsfile", default="systems.csv", \
-                        help="file of highway systems to include")
-parser.add_argument("-u", "--userlistfilepath", default="../../../UserData/list_files",\
-                        help="path to the user list file data")
+                    help="file of highway systems to include")
+parser.add_argument("-u", "--userlistfilepath", default="../../../UserData/list_files", \
+                    help="path to the user list file data")
 parser.add_argument("-d", "--databasename", default="TravelMapping", \
-                        help="Database name for .sql file name")
-parser.add_argument("-l", "--logfilepath", default=".", help="Path to write log files, which should have a \"users\" subdirectory")
+                    help="Database name for .sql file name")
+parser.add_argument("-l", "--logfilepath", default=".",
+                    help="Path to write log files, which should have a \"users\" subdirectory")
 parser.add_argument("-c", "--csvstatfilepath", default=".", help="Path to write csv statistics files")
 parser.add_argument("-g", "--graphfilepath", default=".", help="Path to write graph format data files")
 parser.add_argument("-k", "--skipgraphs", action="store_true", help="Turn off generation of graph files")
-parser.add_argument("-n", "--nmpmergepath", default="", help="Path to write data with NMPs merged (generated only if specified)")
-parser.add_argument("-U", "--userlist", default=None, nargs="+", help="For Development: list of users to use in dataset")
+parser.add_argument("-n", "--nmpmergepath", default="",
+                    help="Path to write data with NMPs merged (generated only if specified)")
+parser.add_argument("-U", "--userlist", default=None, nargs="+",
+                    help="For Development: list of users to use in dataset")
 parser.add_argument("-t", "--numthreads", default="4", help="Number of threads to use for concurrent tasks")
-parser.add_argument("-e", "--errorcheck", action="store_true", help="Run only the subset of the process needed to verify highway data changes")
+parser.add_argument("-e", "--errorcheck", action="store_true",
+                    help="Run only the subset of the process needed to verify highway data changes")
 args = parser.parse_args()
 
 #
@@ -79,7 +85,7 @@ print(et.et() + "Reading region, country, and continent descriptions.")
 
 continents = []
 try:
-    file = open(args.highwaydatapath+"/continents.csv", "rt",encoding='utf-8')
+    file = open(args.highwaydatapath + "/continents.csv", "rt", encoding='utf-8')
 except OSError as e:
     el.add_error(str(e))
 else:
@@ -95,7 +101,7 @@ else:
 
 countries = []
 try:
-    file = open(args.highwaydatapath+"/countries.csv", "rt",encoding='utf-8')
+    file = open(args.highwaydatapath + "/countries.csv", "rt", encoding='utf-8')
 except OSError as e:
     el.add_error(str(e))
 else:
@@ -111,7 +117,7 @@ else:
 
 all_regions = []
 try:
-    file = open(args.highwaydatapath+"/regions.csv", "rt",encoding='utf-8')
+    file = open(args.highwaydatapath + "/regions.csv", "rt", encoding='utf-8')
 except OSError as e:
     el.add_error(str(e))
 else:
@@ -145,9 +151,9 @@ else:
 
 # Create a list of HighwaySystem objects, one per system in systems.csv file
 highway_systems = []
-print(et.et() + "Reading systems list in " + args.highwaydatapath+"/"+args.systemsfile + ".  ",end="",flush=True)
+print(et.et() + "Reading systems list in " + args.highwaydatapath + "/" + args.systemsfile + ".  ", end="", flush=True)
 try:
-    file = open(args.highwaydatapath+"/"+args.systemsfile, "rt",encoding='utf-8')
+    file = open(args.highwaydatapath + "/" + args.systemsfile, "rt", encoding='utf-8')
 except OSError as e:
     el.add_error(str(e))
 else:
@@ -163,11 +169,11 @@ else:
         if len(fields) != 6:
             el.add_error("Could not parse " + args.systemsfile + " line: " + line)
             continue
-        print(fields[0] + ".",end="",flush=True)
+        print(fields[0] + ".", end="", flush=True)
         hs = HighwaySystem(fields[0], fields[1],
-                           fields[2].replace("'","''"),
+                           fields[2].replace("'", "''"),
                            fields[3], fields[4], fields[5], el,
-                           args.highwaydatapath+"/hwy_data/_systems")
+                           args.highwaydatapath + "/hwy_data/_systems")
         highway_systems.append(hs)
     print("")
     # print at the end the lines ignored
@@ -179,7 +185,7 @@ datacheckerrors = []
 
 # check for duplicate root entries among Route and ConnectedRoute
 # data in all highway systems
-print(et.et() + "Checking for duplicate list names in routes, roots in routes and connected routes.",flush=True)
+print(et.et() + "Checking for duplicate list names in routes, roots in routes and connected routes.", flush=True)
 roots = set()
 list_names = set()
 duplicate_list_names = set()
@@ -194,7 +200,7 @@ for h in highway_systems:
             duplicate_list_names.add(list_name)
         else:
             list_names.add(list_name)
-            
+
 con_roots = set()
 for h in highway_systems:
     for cr in h.con_route_list:
@@ -233,46 +239,49 @@ else:
 
 # write file mapping CHM datacheck route lists to root (commented out,
 # unlikely needed now)
-#print(et.et() + "Writing CHM datacheck to TravelMapping route pairings.")
-#file = open(args.csvstatfilepath + "/routepairings.csv","wt")
-#for h in highway_systems:
+# print(et.et() + "Writing CHM datacheck to TravelMapping route pairings.")
+# file = open(args.csvstatfilepath + "/routepairings.csv","wt")
+# for h in highway_systems:
 #    for r in h.route_list:
 #        file.write(r.region + " " + r.list_entry_name() + ";" + r.root + "\n")
-#file.close()
+# file.close()
 
 # For tracking whether any .wpt files are in the directory tree
 # that do not have a .csv file entry that causes them to be
 # read into the data
-print(et.et() + "Finding all .wpt files. ",end="",flush=True)
+print(et.et() + "Finding all .wpt files. ", end="", flush=True)
 all_wpt_files = []
-for dir, sub, files in os.walk(args.highwaydatapath+"/hwy_data"):
+for dir, sub, files in os.walk(args.highwaydatapath + "/hwy_data"):
     for file in files:
         if file.endswith('.wpt') and '_boundaries' not in dir:
-            all_wpt_files.append(dir+"/"+file)
+            all_wpt_files.append(dir + "/" + file)
 print(str(len(all_wpt_files)) + " files found.")
 
 # For finding colocated Waypoints and concurrent segments, we have
 # quadtree of all Waypoints in existence to find them efficiently
-all_waypoints = WaypointQuadtree(-90,-180,90,180)
+all_waypoints = WaypointQuadtree(-90, -180, 90, 180)
 all_waypoints_lock = threading.Lock()
 
 print(et.et() + "Reading waypoints for all routes.")
+
+
 # Next, read all of the .wpt files for each HighwaySystem
 def read_wpts_for_highway_system(h):
-    print(h.systemname,end="",flush=True)
+    print(h.systemname, end="", flush=True)
     for r in h.route_list:
         # get full path to remove from all_wpt_files list
-        wpt_path = args.highwaydatapath+"/hwy_data"+"/"+r.region + "/" + r.system.systemname+"/"+r.root+".wpt"
+        wpt_path = args.highwaydatapath + "/hwy_data" + "/" + r.region + "/" + r.system.systemname + "/" + r.root + ".wpt"
         if wpt_path in all_wpt_files:
             all_wpt_files.remove(wpt_path)
-        r.read_wpt(all_waypoints,all_waypoints_lock,datacheckerrors,
-                   el,args.highwaydatapath+"/hwy_data")
+        r.read_wpt(all_waypoints, all_waypoints_lock, datacheckerrors,
+                   el, args.highwaydatapath + "/hwy_data")
         if len(r.point_list) < 2:
             el.add_error("Route contains fewer than 2 points: " + str(r))
-        print(".", end="",flush=True)
-        #print(str(r))
-        #r.print_route()
+        print(".", end="", flush=True)
+        # print(str(r))
+        # r.print_route()
     print("!", flush=True)
+
 
 # set up for threaded processing of highway systems
 class ReadWptThread(threading.Thread):
@@ -284,22 +293,23 @@ class ReadWptThread(threading.Thread):
         self.lock = lock
 
     def run(self):
-        #print("Starting ReadWptThread " + str(self.id) + " lock is " + str(self.lock))
+        # print("Starting ReadWptThread " + str(self.id) + " lock is " + str(self.lock))
         while True:
             self.lock.acquire(True)
-            #print("Thread " + str(self.id) + " with len(self.hs_list)=" + str(len(self.hs_list)))
+            # print("Thread " + str(self.id) + " with len(self.hs_list)=" + str(len(self.hs_list)))
             if len(self.hs_list) == 0:
                 self.lock.release()
                 break
             h = self.hs_list.pop()
             self.lock.release()
-            #print("Thread " + str(self.id) + " assigned " + str(h))
+            # print("Thread " + str(self.id) + " assigned " + str(h))
             read_wpts_for_highway_system(h)
-                
-        #print("Exiting ReadWptThread " + str(self.id))
-        
+
+        # print("Exiting ReadWptThread " + str(self.id))
+
+
 hs_lock = threading.Lock()
-#print("Created lock: " + str(hs_lock))
+# print("Created lock: " + str(hs_lock))
 hs = highway_systems[:]
 hs.reverse()
 thread_list = []
@@ -315,7 +325,7 @@ for t in thread_list:
 for t in thread_list:
     t.join()
 
-#for h in highway_systems:
+# for h in highway_systems:
 #    read_wpts_for_highway_system(h)
 
 print(et.et() + "Sorting waypoints in Quadtree.")
@@ -327,7 +337,7 @@ for w in all_waypoints.point_list():
         w.colocated.sort(key=lambda waypoint: waypoint.route.root + "@" + waypoint.label)
 
 print(et.et() + "Finding unprocessed wpt files.", flush=True)
-unprocessedfile = open(args.logfilepath+'/unprocessedwpts.log','w',encoding='utf-8')
+unprocessedfile = open(args.logfilepath + '/unprocessedwpts.log', 'w', encoding='utf-8')
 if len(all_wpt_files) > 0:
     print(str(len(all_wpt_files)) + " .wpt files in " + args.highwaydatapath +
           "/hwy_data not processed, see unprocessedwpts.log.")
@@ -340,111 +350,10 @@ unprocessedfile.close()
 
 # Near-miss point log
 print(et.et() + "Near-miss point log and tm-master.nmp file.", flush=True)
-
-# read in fp file
-nmpfplist = []
-nmpfpfile = open(args.highwaydatapath+'/nmpfps.log','r')
-nmpfpfilelines = nmpfpfile.readlines()
-for line in nmpfpfilelines:
-    if len(line.rstrip('\n ')) > 0:
-        nmpfplist.append(line.rstrip('\n '))
-nmpfpfile.close()
-
-nmploglines = []
-nmplog = open(args.logfilepath+'/nearmisspoints.log','w')
-nmpnmp = open(args.logfilepath+'/tm-master.nmp','w')
-for w in all_waypoints.point_list():
-    if w.near_miss_points is not None:
-        nmpline = str(w) + " NMP "
-        nmplooksintentional = False
-        nmpnmplines = []
-        # sort the near miss points for consistent ordering to facilitate
-        # NMP FP marking
-        for other_w in sorted(w.near_miss_points,
-                              key=lambda waypoint:
-                              waypoint.route.root + "@" + waypoint.label):
-            if (abs(w.lat - other_w.lat) < 0.0000015) and \
-               (abs(w.lng - other_w.lng) < 0.0000015):
-                nmplooksintentional = True
-            nmpline += str(other_w) + " "
-            w_label = w.route.root + "@" + w.label
-            other_label = other_w.route.root + "@" + other_w.label
-            # make sure we only plot once, since the NMP should be listed
-            # both ways (other_w in w's list, w in other_w's list)
-            if w_label < other_label:
-                nmpnmplines.append(w_label + " " + str(w.lat) + " " + str(w.lng))
-                nmpnmplines.append(other_label + " " + str(other_w.lat) + " " + str(other_w.lng))
-        # indicate if this was in the FP list or if it's off by exact amt
-        # so looks like it's intentional, and detach near_miss_points list
-        # so it doesn't get a rewrite in nmp_merged WPT files
-        # also set the extra field to mark FP/LI items in the .nmp file
-        extra_field = ""
-        if nmpline.rstrip() in nmpfplist:
-            nmpfplist.remove(nmpline.rstrip())
-            nmpline += "[MARKED FP]"
-            w.near_miss_points = None
-            extra_field += "FP"
-        if nmplooksintentional:
-            nmpline += "[LOOKS INTENTIONAL]"
-            w.near_miss_points = None
-            extra_field += "LI"
-        if extra_field != "":
-            extra_field = " " + extra_field
-        nmploglines.append(nmpline.rstrip())
-
-        # write actual lines to .nmp file, indicating FP and/or LI
-        # for marked FPs or looks intentional items
-        for nmpnmpline in nmpnmplines:
-            nmpnmp.write(nmpnmpline + extra_field + "\n")
-nmpnmp.close()
-
-# sort and write actual lines to nearmisspoints.log
-nmploglines.sort()
-for n in nmploglines:
-    nmplog.write(n + '\n')
-nmploglines = None
-nmplog.close()
-
-# report any unmatched nmpfps.log entries
-nmpfpsunmatchedfile = open(args.logfilepath+'/nmpfpsunmatched.log','w')
-for line in nmpfplist:
-    nmpfpsunmatchedfile.write(line + '\n')
-nmpfpsunmatchedfile.close()
-
-# if requested, rewrite data with near-miss points merged in
-if args.nmpmergepath != "" and not args.errorcheck:
-    print(et.et() + "Writing near-miss point merged wpt files.", flush=True)
-    for h in highway_systems:
-        print(h.systemname, end="", flush=True)
-        for r in h.route_list:
-            wptpath = args.nmpmergepath + "/" + r.region + "/" + h.systemname
-            os.makedirs(wptpath, exist_ok=True)
-            wptfile = open(wptpath + "/" + r.root + ".wpt", "wt")
-            for w in r.point_list:
-                wptfile.write(w.label + ' ')
-                for a in w.alt_labels:
-                    wptfile.write(a + ' ')
-                if w.near_miss_points is None:
-                    wptfile.write("http://www.openstreetmap.org/?lat={0:.6f}".format(w.lat) + "&lon={0:.6f}".format(w.lng) + "\n")
-                else:
-                    # for now, arbitrarily choose the northernmost
-                    # latitude and easternmost longitude values in the
-                    # list and denote a "merged" point with the https
-                    lat = w.lat
-                    lng = w.lng
-                    for other_w in w.near_miss_points:
-                        if other_w.lat > lat:
-                            lat = other_w.lat
-                        if other_w.lng > lng:
-                            lng = other_w.lng
-                    wptfile.write("https://www.openstreetmap.org/?lat={0:.6f}".format(lat) + "&lon={0:.6f}".format(lng) + "\n")
-
-            wptfile.close()
-        print(".", end="", flush=True)
-    print()
+nmp.do_nmp()
 
 # Create hash table for faster lookup of routes by list file name
-print(et.et() + "Creating route hash table for list processing:",flush=True)
+print(et.et() + "Creating route hash table for list processing:", flush=True)
 route_hash = dict()
 for h in highway_systems:
     for r in h.route_list:
@@ -455,19 +364,19 @@ for h in highway_systems:
 # Create a list of TravelerList objects, one per person
 traveler_lists = []
 
-print(et.et() + "Processing traveler list files:",end="",flush=True)
+print(et.et() + "Processing traveler list files:", end="", flush=True)
 for t in traveler_ids:
     if t.endswith('.list'):
-        print(" " + t,end="",flush=True)
-        traveler_lists.append(TravelerList(t,route_hash,args.userlistfilepath))
+        print(" " + t, end="", flush=True)
+        traveler_lists.append(TravelerList(t, route_hash, args.userlistfilepath))
 print(" processed " + str(len(traveler_lists)) + " traveler list files.")
 traveler_lists.sort(key=lambda TravelerList: TravelerList.traveler_name)
 
 # Read updates.csv file, just keep in the fields array for now since we're
 # just going to drop this into the DB later anyway
 updates = []
-print(et.et() + "Reading updates file.  ",end="",flush=True)
-with open(args.highwaydatapath+"/updates.csv", "rt", encoding='UTF-8') as file:
+print(et.et() + "Reading updates file.  ", end="", flush=True)
+with open(args.highwaydatapath + "/updates.csv", "rt", encoding='UTF-8') as file:
     lines = file.readlines()
 file.close()
 
@@ -484,8 +393,8 @@ print("")
 # array for now since we're just going to drop this into the DB later
 # anyway
 systemupdates = []
-print(et.et() + "Reading systemupdates file.  ",end="",flush=True)
-with open(args.highwaydatapath+"/systemupdates.csv", "rt", encoding='UTF-8') as file:
+print(et.et() + "Reading systemupdates file.  ", end="", flush=True)
+with open(args.highwaydatapath + "/systemupdates.csv", "rt", encoding='UTF-8') as file:
     lines = file.readlines()
 file.close()
 
@@ -501,7 +410,7 @@ print("")
 # write log file for points in use -- might be more useful in the DB later,
 # or maybe in another format
 print(et.et() + "Writing points in use log.")
-inusefile = open(args.logfilepath+'/pointsinuse.log','w',encoding='UTF-8')
+inusefile = open(args.logfilepath + '/pointsinuse.log', 'w', encoding='UTF-8')
 inusefile.write("Log file created at: " + str(datetime.datetime.now()) + "\n")
 for h in highway_systems:
     for r in h.route_list:
@@ -515,7 +424,7 @@ inusefile.close()
 
 # write log file for alt labels not in use
 print(et.et() + "Writing unused alt labels log.")
-unusedfile = open(args.logfilepath+'/unusedaltlabels.log','w',encoding='UTF-8')
+unusedfile = open(args.logfilepath + '/unusedaltlabels.log', 'w', encoding='UTF-8')
 unusedfile.write("Log file created at: " + str(datetime.datetime.now()) + "\n")
 total_unused_alt_labels = 0
 for h in highway_systems:
@@ -530,14 +439,13 @@ for h in highway_systems:
 unusedfile.write("Total: " + str(total_unused_alt_labels) + "\n")
 unusedfile.close()
 
-
 # concurrency detection -- will augment our structure with list of concurrent
 # segments with each segment (that has a concurrency)
-print(et.et() + "Concurrent segment detection.",end="",flush=True)
-concurrencyfile = open(args.logfilepath+'/concurrencies.log','w',encoding='UTF-8')
+print(et.et() + "Concurrent segment detection.", end="", flush=True)
+concurrencyfile = open(args.logfilepath + '/concurrencies.log', 'w', encoding='UTF-8')
 concurrencyfile.write("Log file created at: " + str(datetime.datetime.now()) + "\n")
 for h in highway_systems:
-    print(".",end="",flush=True)
+    print(".", end="", flush=True)
     for r in h.route_list:
         for s in r.segment_list:
             if s.waypoint1.colocated is not None and s.waypoint2.colocated is not None:
@@ -545,19 +453,21 @@ for h in highway_systems:
                     if w1.route is not r:
                         for w2 in s.waypoint2.colocated:
                             if w1.route is w2.route:
-                                other = w1.route.find_segment_by_waypoints(w1,w2)
+                                other = w1.route.find_segment_by_waypoints(w1, w2)
                                 if other is not None:
                                     if s.concurrent is None:
                                         s.concurrent = []
                                         other.concurrent = s.concurrent
                                         s.concurrent.append(s)
                                         s.concurrent.append(other)
-                                        concurrencyfile.write("New concurrency [" + str(s) + "][" + str(other) + "] (" + str(len(s.concurrent)) + ")\n")
+                                        concurrencyfile.write(
+                                            "New concurrency [" + str(s) + "][" + str(other) + "] (" + str(
+                                                len(s.concurrent)) + ")\n")
                                     else:
                                         other.concurrent = s.concurrent
                                         if other not in s.concurrent:
                                             s.concurrent.append(other)
-                                            #concurrencyfile.write("Added concurrency [" + str(s) + "]-[" + str(other) + "] ("+ str(len(s.concurrent)) + ")\n")
+                                            # concurrencyfile.write("Added concurrency [" + str(s) + "]-[" + str(other) + "] ("+ str(len(s.concurrent)) + ")\n")
                                             concurrencyfile.write("Extended concurrency ")
                                             for x in s.concurrent:
                                                 concurrencyfile.write("[" + str(x) + "]")
@@ -566,20 +476,22 @@ print("!")
 
 # now augment any traveler clinched segments for concurrencies
 
-print(et.et() + "Augmenting travelers for detected concurrent segments.",end="",flush=True)
+print(et.et() + "Augmenting travelers for detected concurrent segments.", end="", flush=True)
 for t in traveler_lists:
-    print(".",end="",flush=True)
+    print(".", end="", flush=True)
     for s in t.clinched_segments:
         if s.concurrent is not None:
             for hs in s.concurrent:
                 if hs.route.system.active_or_preview() and hs.add_clinched_by(t):
-                    concurrencyfile.write("Concurrency augment for traveler " + t.traveler_name + ": [" + str(hs) + "] based on [" + str(s) + "]\n")
+                    concurrencyfile.write(
+                        "Concurrency augment for traveler " + t.traveler_name + ": [" + str(hs) + "] based on [" + str(
+                            s) + "]\n")
 print("!")
 concurrencyfile.close()
 
 # compute lots of stats, first total mileage by route, system, overall, where
 # system and overall are stored in dictionaries by region
-print(et.et() + "Computing stats.",end="",flush=True)
+print(et.et() + "Computing stats.", end="", flush=True)
 # now also keeping separate totals for active only, active+preview,
 # and all for overall (not needed for system, as a system falls into just
 # one of these categories)
@@ -587,7 +499,7 @@ active_only_mileage_by_region = dict()
 active_preview_mileage_by_region = dict()
 overall_mileage_by_region = dict()
 for h in highway_systems:
-    print(".",end="",flush=True)
+    print(".", end="", flush=True)
     for r in h.route_list:
         for s in r.segment_list:
             segment_length = s.length()
@@ -618,36 +530,36 @@ for h in highway_systems:
             # if an entry already exists, create entry if not
             if r.region in overall_mileage_by_region:
                 overall_mileage_by_region[r.region] = overall_mileage_by_region[r.region] + \
-                    segment_length/overall_concurrency_count
+                                                      segment_length / overall_concurrency_count
             else:
-                overall_mileage_by_region[r.region] = segment_length/overall_concurrency_count
+                overall_mileage_by_region[r.region] = segment_length / overall_concurrency_count
 
             # next, same thing for active_preview mileage for the region,
             # if active or preview
             if r.system.active_or_preview():
                 if r.region in active_preview_mileage_by_region:
                     active_preview_mileage_by_region[r.region] = active_preview_mileage_by_region[r.region] + \
-                    segment_length/active_preview_concurrency_count
+                                                                 segment_length / active_preview_concurrency_count
                 else:
-                    active_preview_mileage_by_region[r.region] = segment_length/active_preview_concurrency_count
+                    active_preview_mileage_by_region[r.region] = segment_length / active_preview_concurrency_count
 
             # now same thing for active_only mileage for the region,
             # if active
             if r.system.active():
                 if r.region in active_only_mileage_by_region:
                     active_only_mileage_by_region[r.region] = active_only_mileage_by_region[r.region] + \
-                    segment_length/active_only_concurrency_count
+                                                              segment_length / active_only_concurrency_count
                 else:
-                    active_only_mileage_by_region[r.region] = segment_length/active_only_concurrency_count
+                    active_only_mileage_by_region[r.region] = segment_length / active_only_concurrency_count
 
             # now we move on to totals by region, only the
             # overall since an entire highway system must be
             # at the same level
             if r.region in h.mileage_by_region:
                 h.mileage_by_region[r.region] = h.mileage_by_region[r.region] + \
-                        segment_length/system_concurrency_count
+                                                segment_length / system_concurrency_count
             else:
-                h.mileage_by_region[r.region] = segment_length/system_concurrency_count
+                h.mileage_by_region[r.region] = segment_length / system_concurrency_count
 
             # that's it for overall stats, now credit all travelers
             # who have clinched this segment in their stats
@@ -659,18 +571,17 @@ for h in highway_systems:
                 if r.system.active_or_preview():
                     if r.region in t.active_preview_mileage_by_region:
                         t.active_preview_mileage_by_region[r.region] = t.active_preview_mileage_by_region[r.region] + \
-                            segment_length/active_preview_concurrency_count
+                                                                       segment_length / active_preview_concurrency_count
                     else:
-                        t.active_preview_mileage_by_region[r.region] = segment_length/active_preview_concurrency_count
+                        t.active_preview_mileage_by_region[r.region] = segment_length / active_preview_concurrency_count
 
                 # credit active only for this region
                 if r.system.active():
                     if r.region in t.active_only_mileage_by_region:
                         t.active_only_mileage_by_region[r.region] = t.active_only_mileage_by_region[r.region] + \
-                            segment_length/active_only_concurrency_count
+                                                                    segment_length / active_only_concurrency_count
                     else:
-                        t.active_only_mileage_by_region[r.region] = segment_length/active_only_concurrency_count
-
+                        t.active_only_mileage_by_region[r.region] = segment_length / active_only_concurrency_count
 
                 # credit this system in this region in the messy dictionary
                 # of dictionaries, but skip devel system entries
@@ -680,13 +591,13 @@ for h in highway_systems:
                     t_system_dict = t.system_region_mileages[h.systemname]
                     if r.region in t_system_dict:
                         t_system_dict[r.region] = t_system_dict[r.region] + \
-                        segment_length/system_concurrency_count
+                                                  segment_length / system_concurrency_count
                     else:
-                        t_system_dict[r.region] = segment_length/system_concurrency_count
+                        t_system_dict[r.region] = segment_length / system_concurrency_count
 print("!", flush=True)
 
-print(et.et() + "Writing highway data stats log file (highwaydatastats.log).",flush=True)
-hdstatsfile = open(args.logfilepath+"/highwaydatastats.log","wt",encoding='UTF-8')
+print(et.et() + "Writing highway data stats log file (highwaydatastats.log).", flush=True)
+hdstatsfile = open(args.logfilepath + "/highwaydatastats.log", "wt", encoding='UTF-8')
 hdstatsfile.write("Travel Mapping highway mileage as of " + str(datetime.datetime.now()) + '\n')
 active_only_miles = math.fsum(list(active_only_mileage_by_region.values()))
 hdstatsfile.write("Active routes (active): " + "{0:.2f}".format(active_only_miles) + " mi\n")
@@ -722,7 +633,7 @@ for e in region_entries:
 for h in highway_systems:
     hdstatsfile.write("System " + h.systemname + " (" + h.level + ") total: "
                       + "{0:.2f}".format(math.fsum(list(h.mileage_by_region.values()))) \
-                             + ' mi\n')
+                      + ' mi\n')
     if len(h.mileage_by_region) > 1:
         hdstatsfile.write("System " + h.systemname + " by region:\n")
         for region in sorted(h.mileage_by_region.keys()):
@@ -751,14 +662,15 @@ csmbr_values = []
 ccr_values = []
 cr_values = []
 # now add user clinched stats to their log entries
-print(et.et() + "Creating per-traveler stats log entries and augmenting data structure.",end="",flush=True)
+print(et.et() + "Creating per-traveler stats log entries and augmenting data structure.", end="", flush=True)
 for t in traveler_lists:
-    print(".",end="",flush=True)
+    print(".", end="", flush=True)
     t.log_entries.append("Clinched Highway Statistics")
     t_active_only_miles = math.fsum(list(t.active_only_mileage_by_region.values()))
-    t.log_entries.append("Overall in active systems: " + format_clinched_mi(t_active_only_miles,active_only_miles))
+    t.log_entries.append("Overall in active systems: " + format_clinched_mi(t_active_only_miles, active_only_miles))
     t_active_preview_miles = math.fsum(list(t.active_preview_mileage_by_region.values()))
-    t.log_entries.append("Overall in active+preview systems: " + format_clinched_mi(t_active_preview_miles,active_preview_miles))
+    t.log_entries.append(
+        "Overall in active+preview systems: " + format_clinched_mi(t_active_preview_miles, active_preview_miles))
 
     t.log_entries.append("Overall by region: (each line reports active only then active+preview)")
     for region in sorted(t.active_preview_mileage_by_region.keys()):
@@ -785,7 +697,7 @@ for t in traveler_lists:
     t.con_routes_traveled = dict()
     t.con_routes_clinched = dict()
     t.routes_traveled = dict()
-    #t.routes_clinched = dict()
+    # t.routes_clinched = dict()
 
     # present stats by system here, also generate entries for
     # DB table clinchedSystemMileageByRegion as we compute and
@@ -828,7 +740,7 @@ for t in traveler_lists:
                                             str(system_region_mileage) + "')")
                     if len(h.mileage_by_region) > 1:
                         t.log_entries.append("  " + region + ": " + \
-                                                 format_clinched_mi(system_region_mileage, h.mileage_by_region[region]))
+                                             format_clinched_mi(system_region_mileage, h.mileage_by_region[region]))
 
             # stats by highway for the system, by connected route and
             # by each segment crossing region boundaries if applicable
@@ -854,7 +766,7 @@ for t in traveler_lists:
                             t.routes_traveled[r] = miles
                             con_clinched_miles += miles
                             to_write += "  " + r.readable_name() + ": " + \
-                                format_clinched_mi(miles,r.mileage) + "\n"
+                                        format_clinched_mi(miles, r.mileage) + "\n"
                         con_total_miles += r.mileage
                     if con_clinched_miles > 0:
                         system_con_dict[cr] = con_clinched_miles
@@ -866,46 +778,45 @@ for t in traveler_lists:
                                           + "','" + str(con_clinched_miles) + "','"
                                           + clinched + "')")
                         t.log_entries.append(cr.readable_name() + ": " + \
-                                             format_clinched_mi(con_clinched_miles,con_total_miles))
+                                             format_clinched_mi(con_clinched_miles, con_total_miles))
                         if len(cr.roots) == 1:
                             t.log_entries.append(" (" + cr.roots[0].readable_name() + " only)")
                         else:
                             t.log_entries.append(to_write)
                 t.con_routes_clinched[h.systemname] = con_routes_clinched
                 t.log_entries.append("System " + h.systemname + " connected routes traveled: " + \
-                                         str(len(system_con_dict)) + " of " + \
-                                         str(len(h.con_route_list)) + \
-                                         " ({0:.1f}%)".format(100*len(system_con_dict)/len(h.con_route_list)) + \
-                                         ", clinched: " + str(con_routes_clinched) + " of " + \
-                                         str(len(h.con_route_list)) + \
-                                         " ({0:.1f}%)".format(100*con_routes_clinched/len(h.con_route_list)) + \
-                                         ".")
-
+                                     str(len(system_con_dict)) + " of " + \
+                                     str(len(h.con_route_list)) + \
+                                     " ({0:.1f}%)".format(100 * len(system_con_dict) / len(h.con_route_list)) + \
+                                     ", clinched: " + str(con_routes_clinched) + " of " + \
+                                     str(len(h.con_route_list)) + \
+                                     " ({0:.1f}%)".format(100 * con_routes_clinched / len(h.con_route_list)) + \
+                                     ".")
 
     # grand summary, active only
     t.log_entries.append("Traveled " + str(t.active_systems_traveled) + " of " + str(active_systems) +
-                         " ({0:.1f}%)".format(100*t.active_systems_traveled/active_systems) +
+                         " ({0:.1f}%)".format(100 * t.active_systems_traveled / active_systems) +
                          ", Clinched " + str(t.active_systems_clinched) + " of " + str(active_systems) +
-                         " ({0:.1f}%)".format(100*t.active_systems_clinched/active_systems) +
+                         " ({0:.1f}%)".format(100 * t.active_systems_clinched / active_systems) +
                          " active systems")
     # grand summary, active+preview
     t.log_entries.append("Traveled " + str(t.preview_systems_traveled) + " of " + str(preview_systems) +
-                         " ({0:.1f}%)".format(100*t.preview_systems_traveled/preview_systems) +
+                         " ({0:.1f}%)".format(100 * t.preview_systems_traveled / preview_systems) +
                          ", Clinched " + str(t.preview_systems_clinched) + " of " + str(preview_systems) +
-                         " ({0:.1f}%)".format(100*t.preview_systems_clinched/preview_systems) +
+                         " ({0:.1f}%)".format(100 * t.preview_systems_clinched / preview_systems) +
                          " preview systems")
 print("!", flush=True)
 
 # write log files for traveler lists
-print(et.et() + "Writing traveler list logs.",flush=True)
+print(et.et() + "Writing traveler list logs.", flush=True)
 for t in traveler_lists:
-    t.write_log(args.logfilepath+"/users")
+    t.write_log(args.logfilepath + "/users")
 
 # write stats csv files
-print(et.et() + "Writing stats csv files.",flush=True)
+print(et.et() + "Writing stats csv files.", flush=True)
 
 # first, overall per traveler by region, both active only and active+preview
-allfile = open(args.csvstatfilepath + "/allbyregionactiveonly.csv","w",encoding='UTF-8')
+allfile = open(args.csvstatfilepath + "/allbyregionactiveonly.csv", "w", encoding='UTF-8')
 allfile.write("Traveler,Total")
 regions = sorted(active_only_mileage_by_region.keys())
 for region in regions:
@@ -926,7 +837,7 @@ allfile.write('\n')
 allfile.close()
 
 # active+preview
-allfile = open(args.csvstatfilepath + "/allbyregionactivepreview.csv","w",encoding='UTF-8')
+allfile = open(args.csvstatfilepath + "/allbyregionactivepreview.csv", "w", encoding='UTF-8')
 allfile.write("Traveler,Total")
 regions = sorted(active_preview_mileage_by_region.keys())
 for region in regions:
@@ -948,7 +859,7 @@ allfile.close()
 
 # now, a file for each system, again per traveler by region
 for h in highway_systems:
-    sysfile = open(args.csvstatfilepath + "/" + h.systemname + '-all.csv',"w",encoding='UTF-8')
+    sysfile = open(args.csvstatfilepath + "/" + h.systemname + '-all.csv', "w", encoding='UTF-8')
     sysfile.write('Traveler,Total')
     regions = sorted(h.mileage_by_region.keys())
     for region in regions:
@@ -957,7 +868,8 @@ for h in highway_systems:
     for t in traveler_lists:
         # only include entries for travelers who have any mileage in system
         if h.systemname in t.system_region_mileages:
-            sysfile.write(t.traveler_name + ",{0:.2f}".format(math.fsum(list(t.system_region_mileages[h.systemname].values()))))
+            sysfile.write(
+                t.traveler_name + ",{0:.2f}".format(math.fsum(list(t.system_region_mileages[h.systemname].values()))))
             for region in regions:
                 if region in t.system_region_mileages[h.systemname]:
                     sysfile.write(',{0:.2f}'.format(t.system_region_mileages[h.systemname][region]))
@@ -971,17 +883,17 @@ for h in highway_systems:
     sysfile.close()
 
 # read in the datacheck false positives list
-print(et.et() + "Reading datacheckfps.csv.",flush=True)
-with open(args.highwaydatapath+"/datacheckfps.csv", "rt",encoding='utf-8') as file:
+print(et.et() + "Reading datacheckfps.csv.", flush=True)
+with open(args.highwaydatapath + "/datacheckfps.csv", "rt", encoding='utf-8') as file:
     lines = file.readlines()
 file.close()
 
 lines.pop(0)  # ignore header line
 datacheckfps = []
-datacheck_always_error = [ 'DUPLICATE_LABEL', 'HIDDEN_TERMINUS',
-                           'LABEL_INVALID_CHAR', 'LABEL_SLASHES',
-                           'LONG_UNDERSCORE', 'MALFORMED_URL',
-                           'NONTERMINAL_UNDERSCORE' ]
+datacheck_always_error = ['DUPLICATE_LABEL', 'HIDDEN_TERMINUS',
+                          'LABEL_INVALID_CHAR', 'LABEL_SLASHES',
+                          'LONG_UNDERSCORE', 'MALFORMED_URL',
+                          'NONTERMINAL_UNDERSCORE']
 for line in lines:
     fields = line.rstrip('\n').split(';')
     if len(fields) != 6:
@@ -996,7 +908,7 @@ for line in lines:
 if len(el.error_list) > 0:
     print("ABORTING due to " + str(len(el.error_list)) + " errors:")
     for i in range(len(el.error_list)):
-        print(str(i+1) + ": " + el.error_list[i])
+        print(str(i + 1) + ": " + el.error_list[i])
     sys.exit(1)
 
 # Build a graph structure out of all highway data in active and
@@ -1014,24 +926,24 @@ graph_data.waypoint_naming_log = None
 # create list of graph information for the DB
 graph_list = []
 graph_types = []
-    
+
 # start generating graphs and making entries for graph DB table
 
 if args.skipgraphs or args.errorcheck:
     print(et.et() + "SKIPPING generation of subgraphs.", flush=True)
 else:
     print(et.et() + "Writing master TM simple graph file, tm-master-simple.tmg", flush=True)
-    (sv, se) = graph_data.write_master_tmg_simple(args.graphfilepath+'/tm-master-simple.tmg')
+    (sv, se) = graph_data.write_master_tmg_simple(args.graphfilepath + '/tm-master-simple.tmg')
     graph_list.append(GraphListEntry('tm-master-simple.tmg', 'All Travel Mapping Data', sv, se, 'simple', 'master'))
     print(et.et() + "Writing master TM collapsed graph file, tm-master.tmg.", flush=True)
-    (cv, ce) = graph_data.write_master_tmg_collapsed(args.graphfilepath+'/tm-master.tmg')
+    (cv, ce) = graph_data.write_master_tmg_collapsed(args.graphfilepath + '/tm-master.tmg')
     graph_list.append(GraphListEntry('tm-master.tmg', 'All Travel Mapping Data', cv, ce, 'collapsed', 'master'))
     graph_types.append(['master', 'All Travel Mapping Data',
                         'These graphs contain all routes currently plotted in the Travel Mapping project.'])
 
     # graphs restricted by place/area - from areagraphs.csv file
     print("\n" + et.et() + "Creating area data graphs.", flush=True)
-    with open(args.highwaydatapath+"/graphs/areagraphs.csv", "rt",encoding='utf-8') as file:
+    with open(args.highwaydatapath + "/graphs/areagraphs.csv", "rt", encoding='utf-8') as file:
         lines = file.readlines()
     file.close()
     lines.pop(0);  # ignore header line
@@ -1050,7 +962,7 @@ else:
     graph_types.append(['area', 'Routes Within a Given Radius of a Place',
                         'These graphs contain all routes currently plotted within the given distance radius of the given place.'])
     print("!")
-        
+
     # Graphs restricted by region
     print(et.et() + "Creating regional data graphs.", flush=True)
 
@@ -1062,9 +974,9 @@ else:
             continue
         region_name = r[1]
         region_type = r[4]
-        print(region_code + ' ', end="",flush=True)
+        print(region_code + ' ', end="", flush=True)
         graph_data.write_subgraphs_tmg(graph_list, args.graphfilepath + "/", region_code + "-region",
-                                       region_name + " (" + region_type + ")", "region", [ region_code ], None, None)
+                                       region_name + " (" + region_type + ")", "region", [region_code], None, None)
     graph_types.append(['region', 'Routes Within a Single Region',
                         'These graphs contain all routes currently plotted within the given region.'])
     print("!")
@@ -1075,7 +987,7 @@ else:
     # We will create graph data and a graph file for only a few interesting
     # systems, as many are not useful on their own
     h = None
-    with open(args.highwaydatapath+"/graphs/systemgraphs.csv", "rt",encoding='utf-8') as file:
+    with open(args.highwaydatapath + "/graphs/systemgraphs.csv", "rt", encoding='utf-8') as file:
         lines = file.readlines()
     file.close()
     lines.pop(0);  # ignore header line
@@ -1086,9 +998,9 @@ else:
                 h = hs
                 break
         if h is not None:
-            print(h.systemname + ' ', end="",flush=True)
-            graph_data.write_subgraphs_tmg(graph_list, args.graphfilepath + "/", h.systemname+"-system",
-                                           h.systemname + " (" + h.fullname + ")", "system", None, [ h ], None)
+            print(h.systemname + ' ', end="", flush=True)
+            graph_data.write_subgraphs_tmg(graph_list, args.graphfilepath + "/", h.systemname + "-system",
+                                           h.systemname + " (" + h.fullname + ")", "system", None, [h], None)
     if h is not None:
         graph_types.append(['system', 'Routes Within a Single Highway System',
                             'These graphs contain the routes within a single highway system and are not restricted by region.'])
@@ -1097,7 +1009,7 @@ else:
     # Some additional interesting graphs, the "multisystem" graphs
     print(et.et() + "Creating multisystem graphs.", flush=True)
 
-    with open(args.highwaydatapath+"/graphs/multisystem.csv", "rt",encoding='utf-8') as file:
+    with open(args.highwaydatapath + "/graphs/multisystem.csv", "rt", encoding='utf-8') as file:
         lines = file.readlines()
     file.close()
     lines.pop(0);  # ignore header line
@@ -1121,7 +1033,7 @@ else:
     # Some additional interesting graphs, the "multiregion" graphs
     print(et.et() + "Creating multiregion graphs.", flush=True)
 
-    with open(args.highwaydatapath+"/graphs/multiregion.csv", "rt",encoding='utf-8') as file:
+    with open(args.highwaydatapath + "/graphs/multiregion.csv", "rt", encoding='utf-8') as file:
         lines = file.readlines()
     file.close()
     lines.pop(0);  # ignore header line
@@ -1179,10 +1091,10 @@ else:
     print("!")
 
 # data check: visit each system and route and check for various problems
-print(et.et() + "Performing data checks.",end="",flush=True)
+print(et.et() + "Performing data checks.", end="", flush=True)
 # perform most datachecks here (list initialized above)
 for h in highway_systems:
-    print(".",end="",flush=True)
+    print(".", end="", flush=True)
     for r in h.route_list:
         # set to be used per-route to find label duplicates
         all_route_labels = set()
@@ -1197,9 +1109,9 @@ for h in highway_systems:
 
         # look for hidden termini
         if r.point_list[0].is_hidden:
-            datacheckerrors.append(DatacheckEntry(r,[r.point_list[0].label],'HIDDEN_TERMINUS'))
-        if r.point_list[len(r.point_list)-1].is_hidden:
-            datacheckerrors.append(DatacheckEntry(r,[r.point_list[len(r.point_list)-1].label],'HIDDEN_TERMINUS'))
+            datacheckerrors.append(DatacheckEntry(r, [r.point_list[0].label], 'HIDDEN_TERMINUS'))
+        if r.point_list[len(r.point_list) - 1].is_hidden:
+            datacheckerrors.append(DatacheckEntry(r, [r.point_list[len(r.point_list) - 1].label], 'HIDDEN_TERMINUS'))
 
         for w in r.point_list:
             # duplicate labels
@@ -1208,14 +1120,14 @@ for h in highway_systems:
             for label in label_list:
                 lower_label = label.lower().strip("+*")
                 if lower_label in all_route_labels:
-                    datacheckerrors.append(DatacheckEntry(r,[lower_label],"DUPLICATE_LABEL"))
+                    datacheckerrors.append(DatacheckEntry(r, [lower_label], "DUPLICATE_LABEL"))
                 else:
                     all_route_labels.add(lower_label)
 
             # out-of-bounds coords
             if w.lat > 90 or w.lat < -90 or w.lng > 180 or w.lng < -180:
-                datacheckerrors.append(DatacheckEntry(r,[w.label],'OUT_OF_BOUNDS',
-                                                      "("+str(w.lat)+","+str(w.lng)+")"))
+                datacheckerrors.append(DatacheckEntry(r, [w.label], 'OUT_OF_BOUNDS',
+                                                      "(" + str(w.lat) + "," + str(w.lng) + ")"))
 
             # duplicate coordinates
             latlng = w.lat, w.lng
@@ -1227,10 +1139,10 @@ for h in highway_systems:
                         labels = []
                         labels.append(other_w.label)
                         labels.append(w.label)
-                        datacheckerrors.append(DatacheckEntry(r,labels,"DUPLICATE_COORDS",
-                                                              "("+str(latlng[0])+","+str(latlng[1])+")"))
+                        datacheckerrors.append(DatacheckEntry(r, labels, "DUPLICATE_COORDS",
+                                                              "(" + str(latlng[0]) + "," + str(latlng[1]) + ")"))
             else:
-               coords_used.add(latlng)
+                coords_used.add(latlng)
 
             # visible distance update, and last segment length check
             if prev_w is not None:
@@ -1240,7 +1152,7 @@ for h in highway_systems:
                     labels = []
                     labels.append(prev_w.label)
                     labels.append(w.label)
-                    datacheckerrors.append(DatacheckEntry(r,labels,'LONG_SEGMENT',
+                    datacheckerrors.append(DatacheckEntry(r, labels, 'LONG_SEGMENT',
                                                           "{0:.2f}".format(last_distance)))
 
             if not w.is_hidden:
@@ -1250,77 +1162,80 @@ for h in highway_systems:
                     labels = []
                     labels.append(last_visible.label)
                     labels.append(w.label)
-                    datacheckerrors.append(DatacheckEntry(r,labels,'VISIBLE_DISTANCE',
+                    datacheckerrors.append(DatacheckEntry(r, labels, 'VISIBLE_DISTANCE',
                                                           "{0:.2f}".format(visible_distance)))
                 last_visible = w
                 visible_distance = 0.0
 
                 # looking for the route within the label
-                #match_start = w.label.find(r.route)
-                #if match_start >= 0:
-                    # we have a potential match, just need to make sure if the route
-                    # name ends with a number that the matched substring isn't followed
-                    # by more numbers (e.g., NY50 is an OK label in NY5)
+                # match_start = w.label.find(r.route)
+                # if match_start >= 0:
+                # we have a potential match, just need to make sure if the route
+                # name ends with a number that the matched substring isn't followed
+                # by more numbers (e.g., NY50 is an OK label in NY5)
                 #    if len(r.route) + match_start == len(w.label) or \
                 #            not w.label[len(r.route) + match_start].isdigit():
                 # partially complete "references own route" -- too many FP
-                #or re.fullmatch('.*/'+r.route+'.*',w.label[w.label) :
+                # or re.fullmatch('.*/'+r.route+'.*',w.label[w.label) :
                 # first check for number match after a slash, if there is one
                 selfref_found = False
                 if '/' in w.label and r.route[-1].isdigit():
-                    digit_starts = len(r.route)-1
+                    digit_starts = len(r.route) - 1
                     while digit_starts >= 0 and r.route[digit_starts].isdigit():
-                        digit_starts-=1
-                    if w.label[w.label.index('/')+1:] == r.route[digit_starts+1:]:
+                        digit_starts -= 1
+                    if w.label[w.label.index('/') + 1:] == r.route[digit_starts + 1:]:
                         selfref_found = True
-                    if w.label[w.label.index('/')+1:] == r.route:
+                    if w.label[w.label.index('/') + 1:] == r.route:
                         selfref_found = True
-                    if '_' in w.label[w.label.index('/')+1:] and w.label[w.label.index('/')+1:w.label.rindex('_')] == r.route[digit_starts+1:]:
+                    if '_' in w.label[w.label.index('/') + 1:] and w.label[w.label.index('/') + 1:w.label.rindex(
+                            '_')] == r.route[digit_starts + 1:]:
                         selfref_found = True
-                    if '_' in w.label[w.label.index('/')+1:] and w.label[w.label.index('/')+1:w.label.rindex('_')] == r.route:
+                    if '_' in w.label[w.label.index('/') + 1:] and w.label[w.label.index('/') + 1:w.label.rindex(
+                            '_')] == r.route:
                         selfref_found = True
 
                 # now the remaining checks
-                if selfref_found or r.route+r.banner == w.label or re.fullmatch(r.route+r.banner+'[_/].*',w.label):
-                    datacheckerrors.append(DatacheckEntry(r,[w.label],'LABEL_SELFREF'))
+                if selfref_found or r.route + r.banner == w.label or re.fullmatch(r.route + r.banner + '[_/].*',
+                                                                                  w.label):
+                    datacheckerrors.append(DatacheckEntry(r, [w.label], 'LABEL_SELFREF'))
 
                 # look for too many underscores in label
                 if w.label.count('_') > 1:
-                    datacheckerrors.append(DatacheckEntry(r,[w.label],'LABEL_UNDERSCORES'))
+                    datacheckerrors.append(DatacheckEntry(r, [w.label], 'LABEL_UNDERSCORES'))
 
                 # look for too many characters after underscore in label
                 if '_' in w.label:
                     if w.label.index('_') < len(w.label) - 5:
-                        datacheckerrors.append(DatacheckEntry(r,[w.label],'LONG_UNDERSCORE'))
+                        datacheckerrors.append(DatacheckEntry(r, [w.label], 'LONG_UNDERSCORE'))
 
                 # look for too many slashes in label
                 if w.label.count('/') > 1:
-                    datacheckerrors.append(DatacheckEntry(r,[w.label],'LABEL_SLASHES'))
+                    datacheckerrors.append(DatacheckEntry(r, [w.label], 'LABEL_SLASHES'))
 
                 # look for parenthesis balance in label
                 if w.label.count('(') != w.label.count(')'):
-                    datacheckerrors.append(DatacheckEntry(r,[w.label],'LABEL_PARENS'))
+                    datacheckerrors.append(DatacheckEntry(r, [w.label], 'LABEL_PARENS'))
 
                 # look for labels with invalid characters
                 if not re.fullmatch('[a-zA-Z0-9()/\+\*_\-\.]+', w.label):
-                    datacheckerrors.append(DatacheckEntry(r,[w.label],'LABEL_INVALID_CHAR'))
+                    datacheckerrors.append(DatacheckEntry(r, [w.label], 'LABEL_INVALID_CHAR'))
                 for a in w.alt_labels:
                     if not re.fullmatch('[a-zA-Z0-9()/\+\*_\-\.]+', a):
-                        datacheckerrors.append(DatacheckEntry(r,[a],'LABEL_INVALID_CHAR'))
+                        datacheckerrors.append(DatacheckEntry(r, [a], 'LABEL_INVALID_CHAR'))
 
                 # look for labels with a slash after an underscore
                 if '_' in w.label and '/' in w.label and \
                         w.label.index('/') > w.label.index('_'):
-                    datacheckerrors.append(DatacheckEntry(r,[w.label],'NONTERMINAL_UNDERSCORE'))
+                    datacheckerrors.append(DatacheckEntry(r, [w.label], 'NONTERMINAL_UNDERSCORE'))
 
                 # look for I-xx with Bus instead of BL or BS
                 if re.fullmatch('I\-[0-9]*Bus', w.label):
-                    datacheckerrors.append(DatacheckEntry(r,[w.label],'BUS_WITH_I'))
+                    datacheckerrors.append(DatacheckEntry(r, [w.label], 'BUS_WITH_I'))
 
                 # look for labels that look like hidden waypoints but
                 # which aren't hidden
                 if re.fullmatch('X[0-9][0-9][0-9][0-9][0-9][0-9]', w.label):
-                    datacheckerrors.append(DatacheckEntry(r,[w.label],'LABEL_LOOKS_HIDDEN'))
+                    datacheckerrors.append(DatacheckEntry(r, [w.label], 'LABEL_LOOKS_HIDDEN'))
 
                 # look for USxxxA but not USxxxAlt, B/Bus (others?)
                 ##if re.fullmatch('US[0-9]+A.*', w.label) and not re.fullmatch('US[0-9]+Alt.*', w.label) or \
@@ -1331,23 +1246,23 @@ for h in highway_systems:
             prev_w = w
 
         # angle check is easier with a traditional for loop and array indices
-        for i in range(1, len(r.point_list)-1):
-            #print("computing angle for " + str(r.point_list[i-1]) + ' ' + str(r.point_list[i]) + ' ' + str(r.point_list[i+1]))
-            if r.point_list[i-1].same_coords(r.point_list[i]) or \
-               r.point_list[i+1].same_coords(r.point_list[i]):
+        for i in range(1, len(r.point_list) - 1):
+            # print("computing angle for " + str(r.point_list[i-1]) + ' ' + str(r.point_list[i]) + ' ' + str(r.point_list[i+1]))
+            if r.point_list[i - 1].same_coords(r.point_list[i]) or \
+                    r.point_list[i + 1].same_coords(r.point_list[i]):
                 labels = []
-                labels.append(r.point_list[i-1].label)
+                labels.append(r.point_list[i - 1].label)
                 labels.append(r.point_list[i].label)
-                labels.append(r.point_list[i+1].label)
-                datacheckerrors.append(DatacheckEntry(r,labels,'BAD_ANGLE'))
+                labels.append(r.point_list[i + 1].label)
+                datacheckerrors.append(DatacheckEntry(r, labels, 'BAD_ANGLE'))
             else:
-                angle = r.point_list[i].angle(r.point_list[i-1],r.point_list[i+1])
+                angle = r.point_list[i].angle(r.point_list[i - 1], r.point_list[i + 1])
                 if angle > 135:
                     labels = []
-                    labels.append(r.point_list[i-1].label)
+                    labels.append(r.point_list[i - 1].label)
                     labels.append(r.point_list[i].label)
-                    labels.append(r.point_list[i+1].label)
-                    datacheckerrors.append(DatacheckEntry(r,labels,'SHARP_ANGLE',
+                    labels.append(r.point_list[i + 1].label)
+                    datacheckerrors.append(DatacheckEntry(r, labels, 'SHARP_ANGLE',
                                                           "{0:.2f}".format(angle)))
 print("!", flush=True)
 print(et.et() + "Found " + str(len(datacheckerrors)) + " datacheck errors.")
@@ -1355,39 +1270,42 @@ print(et.et() + "Found " + str(len(datacheckerrors)) + " datacheck errors.")
 datacheckerrors.sort(key=lambda DatacheckEntry: str(DatacheckEntry))
 
 # now mark false positives
-print(et.et() + "Marking datacheck false positives.",end="",flush=True)
-fpfile = open(args.logfilepath+'/nearmatchfps.log','w',encoding='utf-8')
+print(et.et() + "Marking datacheck false positives.", end="", flush=True)
+fpfile = open(args.logfilepath + '/nearmatchfps.log', 'w', encoding='utf-8')
 fpfile.write("Log file created at: " + str(datetime.datetime.now()) + "\n")
 toremove = []
 counter = 0
 fpcount = 0
 for d in datacheckerrors:
-    #print("Checking: " + str(d))
+    # print("Checking: " + str(d))
     counter += 1
     if counter % 1000 == 0:
-        print(".", end="",flush=True)
+        print(".", end="", flush=True)
     for fp in datacheckfps:
-        #print("Comparing: " + str(d) + " to " + str(fp))
+        # print("Comparing: " + str(d) + " to " + str(fp))
         if d.match_except_info(fp):
             if d.info == fp[5]:
-                #print("Match!")
+                # print("Match!")
                 d.fp = True
                 fpcount += 1
                 datacheckfps.remove(fp)
                 break
-            fpfile.write("FP_ENTRY: " + fp[0] + ';' + fp[1] + ';' + fp[2] + ';' + fp[3] + ';' + fp[4] + ';' + fp[5] + '\n')
-            fpfile.write("CHANGETO: " + fp[0] + ';' + fp[1] + ';' + fp[2] + ';' + fp[3] + ';' + fp[4] + ';' + d.info + '\n')
+            fpfile.write(
+                "FP_ENTRY: " + fp[0] + ';' + fp[1] + ';' + fp[2] + ';' + fp[3] + ';' + fp[4] + ';' + fp[5] + '\n')
+            fpfile.write(
+                "CHANGETO: " + fp[0] + ';' + fp[1] + ';' + fp[2] + ';' + fp[3] + ';' + fp[4] + ';' + d.info + '\n')
 fpfile.close()
 print("!", flush=True)
 print(et.et() + "Matched " + str(fpcount) + " FP entries.", flush=True)
 
 # write log of unmatched false positives from the datacheckfps.csv
 print(et.et() + "Writing log of unmatched datacheck FP entries.")
-fpfile = open(args.logfilepath+'/unmatchedfps.log','w',encoding='utf-8')
+fpfile = open(args.logfilepath + '/unmatchedfps.log', 'w', encoding='utf-8')
 fpfile.write("Log file created at: " + str(datetime.datetime.now()) + "\n")
 if len(datacheckfps) > 0:
     for entry in datacheckfps:
-        fpfile.write(entry[0] + ';' + entry[1] + ';' + entry[2] + ';' + entry[3] + ';' + entry[4] + ';' + entry[5] + '\n')
+        fpfile.write(
+            entry[0] + ';' + entry[1] + ';' + entry[2] + ';' + entry[3] + ';' + entry[4] + ';' + entry[5] + '\n')
 else:
     fpfile.write("No unmatched FP entries.")
 fpfile.close()
@@ -1402,20 +1320,20 @@ logfile.write("Root;Waypoint1;Waypoint2;Waypoint3;Error;Info\n")
 if len(datacheckerrors) > 0:
     for d in datacheckerrors:
         if not d.fp:
-            logfile.write(str(d)+"\n")
+            logfile.write(str(d) + "\n")
 else:
     logfile.write("No datacheck errors found.")
 logfile.close()
-    
+
 if args.errorcheck:
     print(et.et() + "SKIPPING database file.")
 else:
     print(et.et() + "Writing database file " + args.databasename + ".sql.")
     # Once all data is read in and processed, create a .sql file that will
     # create all of the DB tables to be used by other parts of the project
-    sqlfile = open(args.databasename+'.sql','w',encoding='UTF-8')
+    sqlfile = open(args.databasename + '.sql', 'w', encoding='UTF-8')
     # Note: removed "USE" line, DB name must be specified on the mysql command line
-    
+
     # we have to drop tables in the right order to avoid foreign key errors
     sqlfile.write('DROP TABLE IF EXISTS datacheckErrors;\n')
     sqlfile.write('DROP TABLE IF EXISTS clinchedConnectedRoutes;\n')
@@ -1436,7 +1354,7 @@ else:
     sqlfile.write('DROP TABLE IF EXISTS regions;\n')
     sqlfile.write('DROP TABLE IF EXISTS countries;\n')
     sqlfile.write('DROP TABLE IF EXISTS continents;\n')
-    
+
     # first, continents, countries, and regions
     sqlfile.write('CREATE TABLE continents (code VARCHAR(3), name VARCHAR(15), PRIMARY KEY(code));\n')
     sqlfile.write('INSERT INTO continents VALUES\n')
@@ -1455,17 +1373,19 @@ else:
         if not first:
             sqlfile.write(",")
         first = False
-        sqlfile.write("('" + c[0] + "','" + c[1].replace("'","''") + "')\n")
+        sqlfile.write("('" + c[0] + "','" + c[1].replace("'", "''") + "')\n")
     sqlfile.write(";\n")
 
-    sqlfile.write('CREATE TABLE regions (code VARCHAR(8), name VARCHAR(48), country VARCHAR(3), continent VARCHAR(3), regiontype VARCHAR(32), PRIMARY KEY(code), FOREIGN KEY (country) REFERENCES countries(code), FOREIGN KEY (continent) REFERENCES continents(code));\n')
+    sqlfile.write(
+        'CREATE TABLE regions (code VARCHAR(8), name VARCHAR(48), country VARCHAR(3), continent VARCHAR(3), regiontype VARCHAR(32), PRIMARY KEY(code), FOREIGN KEY (country) REFERENCES countries(code), FOREIGN KEY (continent) REFERENCES continents(code));\n')
     sqlfile.write('INSERT INTO regions VALUES\n')
     first = True
     for r in all_regions:
         if not first:
             sqlfile.write(",")
         first = False
-        sqlfile.write("('" + r[0] + "','" + r[1].replace("'","''") + "','" + r[2] + "','" + r[3] + "','" + r[4] + "')\n")
+        sqlfile.write(
+            "('" + r[0] + "','" + r[1].replace("'", "''") + "','" + r[2] + "','" + r[3] + "','" + r[4] + "')\n")
     sqlfile.write(";\n")
 
     # next, a table of the systems, consisting of the system name in the
@@ -1473,7 +1393,8 @@ else:
     # color for its mapping, a level (one of active, preview, devel), and
     # a boolean indicating if the system is active for mapping in the
     # project in the field 'active'
-    sqlfile.write('CREATE TABLE systems (systemName VARCHAR(10), countryCode CHAR(3), fullName VARCHAR(60), color VARCHAR(16), level VARCHAR(10), tier INTEGER, csvOrder INTEGER, PRIMARY KEY(systemName));\n')
+    sqlfile.write(
+        'CREATE TABLE systems (systemName VARCHAR(10), countryCode CHAR(3), fullName VARCHAR(60), color VARCHAR(16), level VARCHAR(10), tier INTEGER, csvOrder INTEGER, PRIMARY KEY(systemName));\n')
     sqlfile.write('INSERT INTO systems VALUES\n')
     first = True
     csvOrder = 0
@@ -1481,14 +1402,15 @@ else:
         if not first:
             sqlfile.write(",")
         first = False
-        sqlfile.write("('" + h.systemname + "','" +  h.country + "','" +
+        sqlfile.write("('" + h.systemname + "','" + h.country + "','" +
                       h.fullname + "','" + h.color + "','" + h.level +
                       "','" + str(h.tier) + "','" + str(csvOrder) + "')\n")
         csvOrder += 1
     sqlfile.write(";\n")
 
     # next, a table of highways, with the same fields as in the first line
-    sqlfile.write('CREATE TABLE routes (systemName VARCHAR(10), region VARCHAR(8), route VARCHAR(16), banner VARCHAR(6), abbrev VARCHAR(3), city VARCHAR(100), root VARCHAR(32), mileage FLOAT, rootOrder INTEGER, csvOrder INTEGER, PRIMARY KEY(root), FOREIGN KEY (systemName) REFERENCES systems(systemName));\n')
+    sqlfile.write(
+        'CREATE TABLE routes (systemName VARCHAR(10), region VARCHAR(8), route VARCHAR(16), banner VARCHAR(6), abbrev VARCHAR(3), city VARCHAR(100), root VARCHAR(32), mileage FLOAT, rootOrder INTEGER, csvOrder INTEGER, PRIMARY KEY(root), FOREIGN KEY (systemName) REFERENCES systems(systemName));\n')
     sqlfile.write('INSERT INTO routes VALUES\n')
     first = True
     csvOrder = 0
@@ -1502,7 +1424,8 @@ else:
     sqlfile.write(";\n")
 
     # connected routes table, but only first "root" in each in this table
-    sqlfile.write('CREATE TABLE connectedRoutes (systemName VARCHAR(10), route VARCHAR(16), banner VARCHAR(6), groupName VARCHAR(100), firstRoot VARCHAR(32), mileage FLOAT, csvOrder INTEGER, PRIMARY KEY(firstRoot), FOREIGN KEY (firstRoot) REFERENCES routes(root));\n')
+    sqlfile.write(
+        'CREATE TABLE connectedRoutes (systemName VARCHAR(10), route VARCHAR(16), banner VARCHAR(6), groupName VARCHAR(100), firstRoot VARCHAR(32), mileage FLOAT, csvOrder INTEGER, PRIMARY KEY(firstRoot), FOREIGN KEY (firstRoot) REFERENCES routes(root));\n')
     sqlfile.write('INSERT INTO connectedRoutes VALUES\n')
     first = True
     csvOrder = 0
@@ -1517,12 +1440,13 @@ else:
 
     # This table has remaining roots for any connected route
     # that connects multiple routes/roots
-    sqlfile.write('CREATE TABLE connectedRouteRoots (firstRoot VARCHAR(32), root VARCHAR(32), FOREIGN KEY (firstRoot) REFERENCES connectedRoutes(firstRoot));\n')
+    sqlfile.write(
+        'CREATE TABLE connectedRouteRoots (firstRoot VARCHAR(32), root VARCHAR(32), FOREIGN KEY (firstRoot) REFERENCES connectedRoutes(firstRoot));\n')
     first = True
     for h in highway_systems:
         for cr in h.con_route_list:
             if len(cr.roots) > 1:
-                for i in range(1,len(cr.roots)):
+                for i in range(1, len(cr.roots)):
                     if first:
                         sqlfile.write('INSERT INTO connectedRouteRoots VALUES\n')
                     if not first:
@@ -1532,7 +1456,8 @@ else:
     sqlfile.write(";\n")
 
     # Now, a table with raw highway route data: list of points, in order, that define the route
-    sqlfile.write('CREATE TABLE waypoints (pointId INTEGER, pointName VARCHAR(20), latitude DOUBLE, longitude DOUBLE, root VARCHAR(32), PRIMARY KEY(pointId), FOREIGN KEY (root) REFERENCES routes(root));\n')
+    sqlfile.write(
+        'CREATE TABLE waypoints (pointId INTEGER, pointName VARCHAR(20), latitude DOUBLE, longitude DOUBLE, root VARCHAR(32), PRIMARY KEY(pointId), FOREIGN KEY (root) REFERENCES routes(root));\n')
     point_num = 0
     for h in highway_systems:
         for r in h.route_list:
@@ -1544,7 +1469,7 @@ else:
                 first = False
                 w.point_num = point_num
                 sqlfile.write("(" + w.csv_line(point_num) + ")\n")
-                point_num+=1
+                point_num += 1
             sqlfile.write(";\n")
 
     # Build indices to speed latitude/longitude joins for intersecting highway queries
@@ -1552,7 +1477,8 @@ else:
     sqlfile.write('CREATE INDEX `longitude` ON waypoints(`longitude`);\n')
 
     # Table of all HighwaySegments.
-    sqlfile.write('CREATE TABLE segments (segmentId INTEGER, waypoint1 INTEGER, waypoint2 INTEGER, root VARCHAR(32), PRIMARY KEY (segmentId), FOREIGN KEY (waypoint1) REFERENCES waypoints(pointId), FOREIGN KEY (waypoint2) REFERENCES waypoints(pointId), FOREIGN KEY (root) REFERENCES routes(root));\n')
+    sqlfile.write(
+        'CREATE TABLE segments (segmentId INTEGER, waypoint1 INTEGER, waypoint2 INTEGER, root VARCHAR(32), PRIMARY KEY (segmentId), FOREIGN KEY (waypoint1) REFERENCES waypoints(pointId), FOREIGN KEY (waypoint2) REFERENCES waypoints(pointId), FOREIGN KEY (root) REFERENCES routes(root));\n')
     segment_num = 0
     clinched_list = []
     for h in highway_systems:
@@ -1571,20 +1497,22 @@ else:
 
     # maybe a separate traveler table will make sense but for now, I'll just use
     # the name from the .list name
-    sqlfile.write('CREATE TABLE clinched (segmentId INTEGER, traveler VARCHAR(48), FOREIGN KEY (segmentId) REFERENCES segments(segmentId));\n')
+    sqlfile.write(
+        'CREATE TABLE clinched (segmentId INTEGER, traveler VARCHAR(48), FOREIGN KEY (segmentId) REFERENCES segments(segmentId));\n')
     for start in range(0, len(clinched_list), 10000):
         sqlfile.write('INSERT INTO clinched VALUES\n')
         first = True
-        for c in clinched_list[start:start+10000]:
+        for c in clinched_list[start:start + 10000]:
             if not first:
                 sqlfile.write(",")
             first = False
             sqlfile.write("(" + c + ")\n")
         sqlfile.write(";\n")
-        
+
     # overall mileage by region data (with concurrencies accounted for,
     # active systems only then active+preview)
-    sqlfile.write('CREATE TABLE overallMileageByRegion (region VARCHAR(8), activeMileage FLOAT, activePreviewMileage FLOAT);\n')
+    sqlfile.write(
+        'CREATE TABLE overallMileageByRegion (region VARCHAR(8), activeMileage FLOAT, activePreviewMileage FLOAT);\n')
     sqlfile.write('INSERT INTO overallMileageByRegion VALUES\n')
     first = True
     for region in list(active_preview_mileage_by_region.keys()):
@@ -1604,7 +1532,8 @@ else:
 
     # system mileage by region data (with concurrencies accounted for,
     # active systems and preview systems only)
-    sqlfile.write('CREATE TABLE systemMileageByRegion (systemName VARCHAR(10), region VARCHAR(8), mileage FLOAT, FOREIGN KEY (systemName) REFERENCES systems(systemName));\n')
+    sqlfile.write(
+        'CREATE TABLE systemMileageByRegion (systemName VARCHAR(10), region VARCHAR(8), mileage FLOAT, FOREIGN KEY (systemName) REFERENCES systems(systemName));\n')
     sqlfile.write('INSERT INTO systemMileageByRegion VALUES\n')
     first = True
     for h in highway_systems:
@@ -1618,7 +1547,8 @@ else:
 
     # clinched overall mileage by region data (with concurrencies
     # accounted for, active systems and preview systems only)
-    sqlfile.write('CREATE TABLE clinchedOverallMileageByRegion (region VARCHAR(8), traveler VARCHAR(48), activeMileage FLOAT, activePreviewMileage FLOAT);\n')
+    sqlfile.write(
+        'CREATE TABLE clinchedOverallMileageByRegion (region VARCHAR(8), traveler VARCHAR(48), activeMileage FLOAT, activePreviewMileage FLOAT);\n')
     sqlfile.write('INSERT INTO clinchedOverallMileageByRegion VALUES\n')
     first = True
     for t in traveler_lists:
@@ -1636,7 +1566,8 @@ else:
 
     # clinched system mileage by region data (with concurrencies accounted
     # for, active systems and preview systems only)
-    sqlfile.write('CREATE TABLE clinchedSystemMileageByRegion (systemName VARCHAR(10), region VARCHAR(8), traveler VARCHAR(48), mileage FLOAT, FOREIGN KEY (systemName) REFERENCES systems(systemName));\n')
+    sqlfile.write(
+        'CREATE TABLE clinchedSystemMileageByRegion (systemName VARCHAR(10), region VARCHAR(8), traveler VARCHAR(48), mileage FLOAT, FOREIGN KEY (systemName) REFERENCES systems(systemName));\n')
     sqlfile.write('INSERT INTO clinchedSystemMileageByRegion VALUES\n')
     first = True
     for line in csmbr_values:
@@ -1648,11 +1579,12 @@ else:
 
     # clinched mileage by connected route, active systems and preview
     # systems only
-    sqlfile.write('CREATE TABLE clinchedConnectedRoutes (route VARCHAR(32), traveler VARCHAR(48), mileage FLOAT, clinched BOOLEAN, FOREIGN KEY (route) REFERENCES connectedRoutes(firstRoot));\n')
+    sqlfile.write(
+        'CREATE TABLE clinchedConnectedRoutes (route VARCHAR(32), traveler VARCHAR(48), mileage FLOAT, clinched BOOLEAN, FOREIGN KEY (route) REFERENCES connectedRoutes(firstRoot));\n')
     for start in range(0, len(ccr_values), 10000):
         sqlfile.write('INSERT INTO clinchedConnectedRoutes VALUES\n')
         first = True
-        for line in ccr_values[start:start+10000]:
+        for line in ccr_values[start:start + 10000]:
             if not first:
                 sqlfile.write(",")
             first = False
@@ -1660,11 +1592,12 @@ else:
         sqlfile.write(";\n")
 
     # clinched mileage by route, active systems and preview systems only
-    sqlfile.write('CREATE TABLE clinchedRoutes (route VARCHAR(32), traveler VARCHAR(48), mileage FLOAT, clinched BOOLEAN, FOREIGN KEY (route) REFERENCES routes(root));\n')
+    sqlfile.write(
+        'CREATE TABLE clinchedRoutes (route VARCHAR(32), traveler VARCHAR(48), mileage FLOAT, clinched BOOLEAN, FOREIGN KEY (route) REFERENCES routes(root));\n')
     for start in range(0, len(cr_values), 10000):
         sqlfile.write('INSERT INTO clinchedRoutes VALUES\n')
         first = True
-        for line in cr_values[start:start+10000]:
+        for line in cr_values[start:start + 10000]:
             if not first:
                 sqlfile.write(",")
             first = False
@@ -1672,29 +1605,36 @@ else:
         sqlfile.write(";\n")
 
     # updates entries
-    sqlfile.write('CREATE TABLE updates (date VARCHAR(10), region VARCHAR(60), route VARCHAR(80), root VARCHAR(32), description VARCHAR(1024));\n')
+    sqlfile.write(
+        'CREATE TABLE updates (date VARCHAR(10), region VARCHAR(60), route VARCHAR(80), root VARCHAR(32), description VARCHAR(1024));\n')
     sqlfile.write('INSERT INTO updates VALUES\n')
     first = True
     for update in updates:
         if not first:
             sqlfile.write(",")
         first = False
-        sqlfile.write("('"+update[0]+"','"+update[1].replace("'","''")+"','"+update[2].replace("'","''")+"','"+update[3]+"','"+update[4].replace("'","''")+"')\n")
+        sqlfile.write(
+            "('" + update[0] + "','" + update[1].replace("'", "''") + "','" + update[2].replace("'", "''") + "','" +
+            update[3] + "','" + update[4].replace("'", "''") + "')\n")
     sqlfile.write(";\n")
 
     # systemUpdates entries
-    sqlfile.write('CREATE TABLE systemUpdates (date VARCHAR(10), region VARCHAR(48), systemName VARCHAR(10), description VARCHAR(128), statusChange VARCHAR(16));\n')
+    sqlfile.write(
+        'CREATE TABLE systemUpdates (date VARCHAR(10), region VARCHAR(48), systemName VARCHAR(10), description VARCHAR(128), statusChange VARCHAR(16));\n')
     sqlfile.write('INSERT INTO systemUpdates VALUES\n')
     first = True
     for systemupdate in systemupdates:
         if not first:
             sqlfile.write(",")
         first = False
-        sqlfile.write("('"+systemupdate[0]+"','"+systemupdate[1].replace("'","''")+"','"+systemupdate[2]+"','"+systemupdate[3].replace("'","''")+"','"+systemupdate[4]+"')\n")
+        sqlfile.write(
+            "('" + systemupdate[0] + "','" + systemupdate[1].replace("'", "''") + "','" + systemupdate[2] + "','" +
+            systemupdate[3].replace("'", "''") + "','" + systemupdate[4] + "')\n")
     sqlfile.write(";\n")
 
     # datacheck errors into the db
-    sqlfile.write('CREATE TABLE datacheckErrors (route VARCHAR(32), label1 VARCHAR(50), label2 VARCHAR(20), label3 VARCHAR(20), code VARCHAR(20), value VARCHAR(32), falsePositive BOOLEAN, FOREIGN KEY (route) REFERENCES routes(root));\n')
+    sqlfile.write(
+        'CREATE TABLE datacheckErrors (route VARCHAR(32), label1 VARCHAR(50), label2 VARCHAR(20), label3 VARCHAR(20), code VARCHAR(20), value VARCHAR(32), falsePositive BOOLEAN, FOREIGN KEY (route) REFERENCES routes(root));\n')
     if len(datacheckerrors) > 0:
         sqlfile.write('INSERT INTO datacheckErrors VALUES\n')
         first = True
@@ -1702,27 +1642,28 @@ else:
             if not first:
                 sqlfile.write(',')
             first = False
-            sqlfile.write("('"+str(d.route.root)+"',")
+            sqlfile.write("('" + str(d.route.root) + "',")
             if len(d.labels) == 0:
                 sqlfile.write("'','','',")
             elif len(d.labels) == 1:
-                sqlfile.write("'"+d.labels[0]+"','','',")
+                sqlfile.write("'" + d.labels[0] + "','','',")
             elif len(d.labels) == 2:
-                sqlfile.write("'"+d.labels[0]+"','"+d.labels[1]+"','',")
+                sqlfile.write("'" + d.labels[0] + "','" + d.labels[1] + "','',")
             else:
-                sqlfile.write("'"+d.labels[0]+"','"+d.labels[1]+"','"+d.labels[2]+"',")
+                sqlfile.write("'" + d.labels[0] + "','" + d.labels[1] + "','" + d.labels[2] + "',")
             if d.fp:
                 fp = '1'
             else:
                 fp = '0'
-            sqlfile.write("'"+d.code+"','"+d.info+"','"+fp+"')\n")
+            sqlfile.write("'" + d.code + "','" + d.info + "','" + fp + "')\n")
     sqlfile.write(";\n")
 
     # update graph info in DB if graphs were generated
     if not args.skipgraphs:
         sqlfile.write('DROP TABLE IF EXISTS graphs;\n')
         sqlfile.write('DROP TABLE IF EXISTS graphTypes;\n')
-        sqlfile.write('CREATE TABLE graphTypes (category VARCHAR(12), descr VARCHAR(100), longDescr TEXT, PRIMARY KEY(category));\n')
+        sqlfile.write(
+            'CREATE TABLE graphTypes (category VARCHAR(12), descr VARCHAR(100), longDescr TEXT, PRIMARY KEY(category));\n')
         if len(graph_types) > 0:
             sqlfile.write('INSERT INTO graphTypes VALUES\n')
             first = True
@@ -1733,7 +1674,8 @@ else:
                 sqlfile.write("('" + g[0] + "','" + g[1] + "','" + g[2] + "')\n")
             sqlfile.write(";\n")
 
-        sqlfile.write('CREATE TABLE graphs (filename VARCHAR(32), descr VARCHAR(100), vertices INTEGER, edges INTEGER, format VARCHAR(10), category VARCHAR(12), FOREIGN KEY (category) REFERENCES graphTypes(category));\n')
+        sqlfile.write(
+            'CREATE TABLE graphs (filename VARCHAR(32), descr VARCHAR(100), vertices INTEGER, edges INTEGER, format VARCHAR(10), category VARCHAR(12), FOREIGN KEY (category) REFERENCES graphTypes(category));\n')
         if len(graph_list) > 0:
             sqlfile.write('INSERT INTO graphs VALUES\n')
             first = True
@@ -1741,9 +1683,10 @@ else:
                 if not first:
                     sqlfile.write(',')
                 first = False
-                sqlfile.write("('" + g.filename + "','" + g.descr.replace("'","''") + "','" + str(g.vertices) + "','" + str(g.edges) + "','" + g.format + "','" + g.category + "')\n")
+                sqlfile.write(
+                    "('" + g.filename + "','" + g.descr.replace("'", "''") + "','" + str(g.vertices) + "','" + str(
+                        g.edges) + "','" + g.format + "','" + g.category + "')\n")
             sqlfile.write(";\n")
-
 
     sqlfile.close()
 
@@ -1758,7 +1701,7 @@ for h in highway_systems:
         points += len(r.point_list)
         segments += len(r.segment_list)
 print("Processed " + str(routes) + " routes with a total of " + \
-          str(points) + " points and " + str(segments) + " segments.")
+      str(points) + " points and " + str(segments) + " segments.")
 if points != all_waypoints.size():
     print("MISMATCH: all_waypoints contains " + str(all_waypoints.size()) + " waypoints!")
 print("WaypointQuadtree contains " + str(all_waypoints.total_nodes()) + " total nodes.")
@@ -1767,7 +1710,7 @@ if not args.errorcheck:
     # compute colocation of waypoints stats
     print(et.et() + "Computing waypoint colocation stats, reporting all with 8 or more colocations:")
     largest_colocate_count = all_waypoints.max_colocated()
-    colocate_counts = [0]*(largest_colocate_count+1)
+    colocate_counts = [0] * (largest_colocate_count + 1)
     big_colocate_locations = dict()
     for w in all_waypoints.point_list():
         c = w.num_colocated()
@@ -1782,16 +1725,16 @@ if not args.errorcheck:
                 the_list = []
                 the_list.append(entry)
                 big_colocate_locations[point] = the_list
-            #print(str(w) + " with " + str(c) + " other points.")
+            # print(str(w) + " with " + str(c) + " other points.")
         colocate_counts[c] += 1
     for place in big_colocate_locations:
         the_list = big_colocate_locations[place]
         print(str(place) + " is occupied by " + str(len(the_list)) + " waypoints: " + str(the_list))
     print("Waypoint colocation counts:")
     unique_locations = 0
-    for c in range(1,largest_colocate_count+1):
-        unique_locations += colocate_counts[c]//c
-        print("{0:6d} are each occupied by {1:2d} waypoints.".format(colocate_counts[c]//c, c))
+    for c in range(1, largest_colocate_count + 1):
+        unique_locations += colocate_counts[c] // c
+        print("{0:6d} are each occupied by {1:2d} waypoints.".format(colocate_counts[c] // c, c))
     print("Unique locations: " + str(unique_locations))
 
 if args.errorcheck:
